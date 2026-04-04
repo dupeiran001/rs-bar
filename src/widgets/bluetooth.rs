@@ -195,6 +195,7 @@ fn bt_icon(state: &BtState) -> &'static str {
 
 pub struct Bluetooth {
     state: BtState,
+    grouped: bool,
 }
 
 impl BarWidget for Bluetooth {
@@ -239,14 +240,13 @@ impl BarWidget for Bluetooth {
         })
         .detach();
 
-        Self { state: initial }
+        Self { state: initial, grouped: false }
     }
+
+    fn set_grouped(&mut self) { self.grouped = true; }
 
     fn render(&mut self, _window: &mut Window, _cx: &mut Context<Self>) -> impl IntoElement {
         let t = crate::config::THEME;
-        let content_h = crate::config::CONTENT_HEIGHT;
-        let button_h = content_h - 4.0;
-        let radius = button_h / 2.0;
 
         let icon_path = bt_icon(&self.state);
         let color = match self.state {
@@ -255,23 +255,21 @@ impl BarWidget for Bluetooth {
             BtState::Connected => t.blue,
         };
 
-        div()
-            .flex()
-            .items_center()
-            .justify_center()
-            .h(px(button_h))
-            .rounded(px(radius))
-            .border_1()
-            .border_color(rgb(t.border))
-            .bg(rgb(t.surface))
-            .px(px(6.0))
-            .child(
-                svg()
-                    .external_path(icon_path.to_string())
-                    .size(px(crate::config::ICON_SIZE))
-                    .text_color(rgb(color))
-                    .flex_shrink_0(),
-            )
+        super::capsule(
+            div()
+                .flex()
+                .items_center()
+                .justify_center()
+                .px(px(6.0))
+                .child(
+                    svg()
+                        .external_path(icon_path.to_string())
+                        .size(px(crate::config::ICON_SIZE))
+                        .text_color(rgb(color))
+                        .flex_shrink_0(),
+                ),
+            self.grouped,
+        )
     }
 }
 

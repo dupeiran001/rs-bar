@@ -205,10 +205,12 @@ fn khz_to_ghz_str(khz: u64) -> String {
 
 // ── state ──────────────────────────────────────────────────────────────
 
+const ICON_GPU_BUSY: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/assets/icons/gpu-busy.svg");
+
 #[derive(Clone)]
 struct FreqReading {
     text: String,
-    gpu_suffix: String,
+    gpu_pct: Option<u32>,
 }
 
 fn take_reading(src: &FreqSources) -> FreqReading {
@@ -224,16 +226,12 @@ fn take_reading(src: &FreqSources) -> FreqReading {
         }
     };
 
-    let gpu_suffix = src
+    let gpu_pct = src
         .gpu
         .as_ref()
-        .and_then(|g| {
-            let pct = read_gpu_busy(g)?;
-            Some(format!("{}{}%", g.label, pct))
-        })
-        .unwrap_or_default();
+        .and_then(|g| read_gpu_busy(g));
 
-    FreqReading { text, gpu_suffix }
+    FreqReading { text, gpu_pct }
 }
 
 // ── timerfd + epoll monitor ────────────────────────────────────────────
@@ -277,6 +275,7 @@ fn freq_monitor(tx: async_channel::Sender<FreqReading>) {
 
 pub struct CpuFreq {
     reading: FreqReading,
+    grouped: bool,
 }
 
 impl BarWidget for CpuFreq {
@@ -301,17 +300,17 @@ impl BarWidget for CpuFreq {
         Self {
             reading: FreqReading {
                 text: String::new(),
-                gpu_suffix: String::new(),
+                gpu_pct: None,
             },
+            grouped: false,
         }
     }
 
+    fn set_grouped(&mut self) { self.grouped = true; }
+
     fn render(&mut self, _window: &mut Window, _cx: &mut Context<Self>) -> impl IntoElement {
         let t = crate::config::THEME;
-        let content_h = crate::config::CONTENT_HEIGHT;
         let icon_size = crate::config::ICON_SIZE;
-        let button_h = content_h - 4.0;
-        let radius = button_h / 2.0;
         let r = &self.reading;
 
         let sep = || div().text_color(rgb(t.border)).child("│");
@@ -329,23 +328,34 @@ impl BarWidget for CpuFreq {
             )
             .child(div().text_color(rgb(t.fg)).child(r.text.clone()));
 
-        if !r.gpu_suffix.is_empty() {
+        if let Some(pct) = r.gpu_pct {
             row = row
                 .child(sep())
-                .child(div().text_color(rgb(t.text_dim)).child(r.gpu_suffix.clone()));
+                .child(
+                    div()
+                        .flex()
+                        .items_center()
+                        .gap(px(3.0))
+                        .child(
+                            svg()
+                                .external_path(ICON_GPU_BUSY.to_string())
+                                .size(px(icon_size))
+                                .text_color(rgb(t.text_dim))
+                                .flex_shrink_0(),
+                        )
+                        .child(div().text_color(rgb(t.text_dim)).child(format!("{pct}%"))),
+                );
         }
 
-        div()
-            .flex()
-            .items_center()
-            .h(px(button_h))
-            .rounded(px(radius))
-            .border_1()
-            .border_color(rgb(t.border))
-            .bg(rgb(t.surface))
-            .px(px(4.0))
-            .text_xs()
-            .child(row)
+        super::capsule(
+            div()
+                .flex()
+                .items_center()
+                .px(px(4.0))
+                .text_xs()
+                .child(row),
+            self.grouped,
+        )
     }
 }
 

@@ -2,7 +2,11 @@ use gpui::App;
 
 use crate::Bar;
 use crate::theme::{self, Theme};
-use crate::widgets::{Bluetooth, Brightness, CapsLock, Clock, CpuFreq, CpuTemp, CpuUsage, Date, Fcitx, Memory, Minimap, PkgUpdate, Power, PowerDraw, Tray, Volume, Wifi, Widget, WindowTitle, Workspaces};
+use crate::widgets::{
+    Bluetooth, Brightness, CapsLock, Clock, CpuFreq, CpuTemp, CpuUsage, Date, Fcitx, Memory,
+    Minimap, PkgUpdate, Power, PowerDraw, Tray, Volume, Widget, Wifi, WindowTitle, Wireguard,
+    Workspaces, group,
+};
 
 pub(crate) const THEME: &Theme = &theme::NORD;
 
@@ -18,6 +22,9 @@ pub(crate) const BRIGHTNESS_UP_CMD: &str = "brightnessctl set +5%";
 pub(crate) const BRIGHTNESS_DOWN_CMD: &str = "brightnessctl set 5%-";
 pub(crate) const POWER_ICON: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/assets/icons/power.svg");
 
+// WireGuard connection name (as shown in `nmcli con show`)
+pub(crate) const WIREGUARD_CONNECTION: &str = "wg";
+
 pub(crate) const BAR_HEIGHT: f32 = 24.0;
 pub(crate) const BORDER_TOP: u32 = THEME.bg;
 pub(crate) const BORDER_BOTTOM: u32 = THEME.border;
@@ -26,18 +33,43 @@ pub(crate) const BORDER_BOTTOM: u32 = THEME.border;
 pub(crate) const CONTENT_HEIGHT: f32 = BAR_HEIGHT - 2.0;
 
 // macro rule to simplify creation of bar widgets
+// Accepts plain widget types and group!() calls:
+//   widgets!(cx, Clock, group!(cx, A, |, B), Date)
 macro_rules! widgets {
-    ($cx:expr, $($w:ty),* $(,)?) => {
-        vec![$(Widget::build::<$w>($cx)),*]
+    // terminal — no more items
+    (@acc $cx:expr, [$($out:expr),*]) => {
+        vec![$($out),*]
+    };
+    // match: group!(...) , rest...
+    (@acc $cx:expr, [$($out:expr),*] group!($($g:tt)*) , $($rest:tt)*) => {
+        widgets!(@acc $cx, [$($out,)* group!($($g)*)] $($rest)*)
+    };
+    // match: group!(...) at end
+    (@acc $cx:expr, [$($out:expr),*] group!($($g:tt)*)) => {
+        widgets!(@acc $cx, [$($out,)* group!($($g)*)])
+    };
+    // match: ident , rest...
+    (@acc $cx:expr, [$($out:expr),*] $w:ident , $($rest:tt)*) => {
+        widgets!(@acc $cx, [$($out,)* Widget::build::<$w>($cx)] $($rest)*)
+    };
+    // match: ident at end
+    (@acc $cx:expr, [$($out:expr),*] $w:ident) => {
+        widgets!(@acc $cx, [$($out,)* Widget::build::<$w>($cx)])
+    };
+    // entry point
+    ($cx:expr, $($items:tt)*) => {
+        widgets!(@acc $cx, [] $($items)*)
     };
 }
 
 pub(crate) fn bar(cx: &mut App) -> Bar {
     Bar {
         left: widgets!(cx, Workspaces, Minimap, WindowTitle),
-        center_left: widgets!(cx,),
-        center: widgets!(cx, CpuFreq, CpuUsage, CpuTemp, Memory, Clock, Date, Wifi, Bluetooth, PkgUpdate, PowerDraw),
-        center_right: widgets!(cx,),
-        right: widgets!(cx, Volume, Brightness, Tray, Fcitx, CapsLock, Power),
+        center_left: widgets!(cx, CpuFreq, group!(cx, CpuUsage, | , CpuTemp), Memory),
+        center: widgets!(cx, Clock),
+        center_right: widgets!(cx, Date, Wifi, Bluetooth, PkgUpdate, PowerDraw),
+        right: widgets!(
+            cx, Wireguard, Volume, Brightness, Tray, Fcitx, CapsLock, Power
+        ),
     }
 }

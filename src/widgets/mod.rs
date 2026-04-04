@@ -6,8 +6,8 @@ mod cpu_freq;
 mod cpu_temp;
 mod cpu_usage;
 mod date;
-mod memory;
 mod fcitx;
+mod memory;
 mod minimap;
 mod pkg_update;
 mod power;
@@ -16,6 +16,7 @@ pub(crate) mod tray;
 mod volume;
 mod wifi;
 mod window_title;
+mod wireguard;
 mod workspaces;
 
 pub use bluetooth::Bluetooth;
@@ -25,9 +26,9 @@ pub use clock::Clock;
 pub use cpu_freq::CpuFreq;
 pub use cpu_temp::CpuTemp;
 pub use cpu_usage::CpuUsage;
-pub use memory::Memory;
 pub use date::Date;
 pub use fcitx::Fcitx;
+pub use memory::Memory;
 pub use minimap::Minimap;
 pub use pkg_update::PkgUpdate;
 pub use power::Power;
@@ -36,20 +37,21 @@ pub use tray::Tray;
 pub use volume::Volume;
 pub use wifi::Wifi;
 pub use window_title::WindowTitle;
+pub use wireguard::Wireguard;
 pub use workspaces::Workspaces;
 
-use gpui::{AnyView, AppContext, Context, IntoElement, Render, Window};
+use gpui::{AnyView, AppContext, Context, IntoElement, ParentElement, Render, Styled, Window, div, px, rgb};
 
-/// The single trait widget authors implement. Defines identity, construction,
-/// and rendering.
-///
-/// Rust's orphan rules prevent a blanket `impl<W: BarWidget> Render for W`,
-/// so use [`impl_render!`] to generate the trivial `Render` forwarding.
+/// The single trait widget authors implement.
 pub trait BarWidget: 'static + Sized {
     const NAME: &str;
 
     fn new(cx: &mut Context<Self>) -> Self;
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement;
+
+    /// Called when this widget is placed inside a `group!()`.
+    /// Widgets should skip their own capsule wrapper when grouped.
+    fn set_grouped(&mut self) {}
 }
 
 /// Generates the GPUI `Render` impl by forwarding to `BarWidget::render`.
@@ -94,5 +96,106 @@ impl Widget {
 
     pub fn view(&self) -> &AnyView {
         &self.view
+    }
+
+    /// Build a grouped widget from entries produced by `group!()`.
+    pub fn build_group(entries: Vec<GroupEntry>, cx: &mut impl AppContext) -> Self {
+        let entity = cx.new(|_cx| WidgetGroup { entries });
+        Self {
+            name: "group",
+            view: entity.into(),
+        }
+    }
+}
+
+// ── Widget grouping ────────────────────────────────────────────────────
+
+pub enum GroupEntry {
+    Widget(AnyView),
+    Separator,
+}
+
+struct WidgetGroup {
+    entries: Vec<GroupEntry>,
+}
+
+impl Render for WidgetGroup {
+    fn render(&mut self, _window: &mut Window, _cx: &mut Context<Self>) -> impl IntoElement {
+        let t = crate::config::THEME;
+        let content_h = crate::config::CONTENT_HEIGHT;
+        let button_h = content_h - 4.0;
+        let radius = button_h / 2.0;
+
+        let mut row = div()
+            .flex()
+            .items_center()
+            .h(px(button_h))
+            .rounded(px(radius))
+            .border_1()
+            .border_color(rgb(t.border))
+            .bg(rgb(t.surface))
+            .px(px(4.0))
+            .gap(px(4.0))
+            .text_xs();
+
+        for entry in &self.entries {
+            match entry {
+                GroupEntry::Widget(view) => {
+                    row = row.child(view.clone());
+                }
+                GroupEntry::Separator => {
+                    row = row.child(div().text_color(rgb(t.border)).child("│"));
+                }
+            }
+        }
+
+        row
+    }
+}
+
+/// Build a group of widgets in a shared capsule.
+///
+/// ```ignore
+/// group!(cx, CpuFreq, CpuUsage, |, CpuTemp, |, Memory)
+/// ```
+///
+/// Widgets are separated by commas. Use `|` for a visual separator (│).
+macro_rules! group {
+    (@item $cx:expr, $entries:ident, |) => {
+        $entries.push($crate::widgets::GroupEntry::Separator);
+    };
+    (@item $cx:expr, $entries:ident, $w:ident) => {{
+        use $crate::widgets::BarWidget as _;
+        use ::gpui::AppContext as _;
+        let entity = $cx.new(|cx| {
+            let mut w = $w::new(cx);
+            w.set_grouped();
+            w
+        });
+        $entries.push($crate::widgets::GroupEntry::Widget(entity.into()));
+    }};
+    ($cx:expr, $($item:tt),* $(,)?) => {{
+        let mut entries: Vec<$crate::widgets::GroupEntry> = Vec::new();
+        $(group!(@item $cx, entries, $item);)*
+        $crate::widgets::Widget::build_group(entries, $cx)
+    }};
+}
+pub(crate) use group;
+
+/// Helper: apply capsule styling to a div, or skip if grouped.
+/// Returns the div with or without capsule shell.
+pub(crate) fn capsule(el: gpui::Div, grouped: bool) -> gpui::Div {
+    if grouped {
+        el
+    } else {
+        let t = crate::config::THEME;
+        let content_h = crate::config::CONTENT_HEIGHT;
+        let button_h = content_h - 4.0;
+        let radius = button_h / 2.0;
+        el.h(px(button_h))
+            .rounded(px(radius))
+            .border_1()
+            .border_color(rgb(t.border))
+            .bg(rgb(t.surface))
     }
 }

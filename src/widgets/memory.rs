@@ -66,6 +66,7 @@ fn mem_monitor(tx: async_channel::Sender<f32>) {
 
 pub struct Memory {
     usage: f32,
+    grouped: bool,
 }
 
 impl BarWidget for Memory {
@@ -87,15 +88,14 @@ impl BarWidget for Memory {
             }
         }).detach();
 
-        Self { usage: 0.0 }
+        Self { usage: 0.0, grouped: false }
     }
+
+    fn set_grouped(&mut self) { self.grouped = true; }
 
     fn render(&mut self, _window: &mut Window, _cx: &mut Context<Self>) -> impl IntoElement {
         let t = crate::config::THEME;
-        let content_h = crate::config::CONTENT_HEIGHT;
         let icon_size = crate::config::ICON_SIZE;
-        let button_h = content_h - 4.0;
-        let radius = button_h / 2.0;
         let pct = self.usage.round() as u32;
 
         let color = if self.usage >= 90.0 {
@@ -106,25 +106,23 @@ impl BarWidget for Memory {
             t.fg
         };
 
-        div()
-            .flex()
-            .items_center()
-            .h(px(button_h))
-            .rounded(px(radius))
-            .border_1()
-            .border_color(rgb(t.border))
-            .bg(rgb(t.surface))
-            .px(px(4.0))
-            .gap(px(4.0))
-            .text_xs()
-            .child(
-                svg()
-                    .external_path(ICON_MEM.to_string())
-                    .size(px(icon_size))
-                    .text_color(rgb(color))
-                    .flex_shrink_0(),
-            )
-            .child(div().text_color(rgb(color)).child(format!("{:>2}%", pct)))
+        super::capsule(
+            div()
+                .flex()
+                .items_center()
+                .px(px(4.0))
+                .gap(px(4.0))
+                .text_xs()
+                .child(
+                    svg()
+                        .external_path(ICON_MEM.to_string())
+                        .size(px(icon_size))
+                        .text_color(rgb(color))
+                        .flex_shrink_0(),
+                )
+                .child(div().text_color(rgb(color)).child(format!("{:>2}%", pct))),
+            self.grouped,
+        )
     }
 }
 

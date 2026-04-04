@@ -157,6 +157,7 @@ fn query_updates(distro: Option<Distro>) -> UpdateState {
 
 pub struct PkgUpdate {
     state: UpdateState,
+    grouped: bool,
 }
 
 impl BarWidget for PkgUpdate {
@@ -207,14 +208,14 @@ impl BarWidget for PkgUpdate {
                 aur: 0,
                 flatpak: 0,
             },
+            grouped: false,
         }
     }
 
+    fn set_grouped(&mut self) { self.grouped = true; }
+
     fn render(&mut self, _window: &mut Window, _cx: &mut Context<Self>) -> impl IntoElement {
         let t = crate::config::THEME;
-        let content_h = crate::config::CONTENT_HEIGHT;
-        let button_h = content_h - 4.0;
-        let radius = button_h / 2.0;
 
         let total = self.state.total();
         let (icon_path, color) = if total == 0 {
@@ -229,23 +230,21 @@ impl BarWidget for PkgUpdate {
             )
         };
 
-        div()
-            .flex()
-            .items_center()
-            .justify_center()
-            .h(px(button_h))
-            .rounded(px(radius))
-            .border_1()
-            .border_color(rgb(t.border))
-            .bg(rgb(t.surface))
-            .px(px(6.0))
-            .child(
-                svg()
-                    .external_path(icon_path.to_string())
-                    .size(px(crate::config::ICON_SIZE))
-                    .text_color(rgb(color))
-                    .flex_shrink_0(),
-            )
+        super::capsule(
+            div()
+                .flex()
+                .items_center()
+                .justify_center()
+                .px(px(6.0))
+                .child(
+                    svg()
+                        .external_path(icon_path.to_string())
+                        .size(px(crate::config::ICON_SIZE))
+                        .text_color(rgb(color))
+                        .flex_shrink_0(),
+                ),
+            self.grouped,
+        )
     }
 }
 

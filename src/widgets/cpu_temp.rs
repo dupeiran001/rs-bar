@@ -183,6 +183,7 @@ fn temp_monitor(tx: async_channel::Sender<u32>) {
 
 pub struct CpuTemp {
     temp: u32,
+    grouped: bool,
 }
 
 impl BarWidget for CpuTemp {
@@ -204,15 +205,14 @@ impl BarWidget for CpuTemp {
             }
         }).detach();
 
-        Self { temp: 0 }
+        Self { temp: 0, grouped: false }
     }
+
+    fn set_grouped(&mut self) { self.grouped = true; }
 
     fn render(&mut self, _window: &mut Window, _cx: &mut Context<Self>) -> impl IntoElement {
         let t = crate::config::THEME;
-        let content_h = crate::config::CONTENT_HEIGHT;
         let icon_size = crate::config::ICON_SIZE;
-        let button_h = content_h - 4.0;
-        let radius = button_h / 2.0;
 
         let color = if self.temp >= 88 {
             t.red
@@ -224,25 +224,23 @@ impl BarWidget for CpuTemp {
             t.fg
         };
 
-        div()
-            .flex()
-            .items_center()
-            .h(px(button_h))
-            .rounded(px(radius))
-            .border_1()
-            .border_color(rgb(t.border))
-            .bg(rgb(t.surface))
-            .px(px(4.0))
-            .gap(px(4.0))
-            .text_xs()
-            .child(
-                svg()
-                    .external_path(ICON_THERMO.to_string())
-                    .size(px(icon_size))
-                    .text_color(rgb(color))
-                    .flex_shrink_0(),
-            )
-            .child(div().text_color(rgb(color)).child(format!("{}°C", self.temp)))
+        super::capsule(
+            div()
+                .flex()
+                .items_center()
+                .px(px(4.0))
+                .gap(px(4.0))
+                .text_xs()
+                .child(
+                    svg()
+                        .external_path(ICON_THERMO.to_string())
+                        .size(px(icon_size))
+                        .text_color(rgb(color))
+                        .flex_shrink_0(),
+                )
+                .child(div().text_color(rgb(color)).child(format!("{}°C", self.temp))),
+            self.grouped,
+        )
     }
 }
 

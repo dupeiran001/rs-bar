@@ -7,6 +7,7 @@ use super::{BarWidget, impl_render};
 
 pub struct Date {
     date: String,
+    grouped: bool,
 }
 
 fn format_date() -> String {
@@ -40,35 +41,33 @@ impl BarWidget for Date {
 
         Self {
             date: format_date(),
+            grouped: false,
         }
     }
 
+    fn set_grouped(&mut self) { self.grouped = true; }
+
     fn render(&mut self, _window: &mut Window, _cx: &mut Context<Self>) -> impl IntoElement {
         let t = crate::config::THEME;
-        let content_h = crate::config::CONTENT_HEIGHT;
-        let button_h = content_h - 4.0;
-        let radius = button_h / 2.0;
 
-        div()
-            .flex()
-            .items_center()
-            .h(px(button_h))
-            .rounded(px(radius))
-            .border_1()
-            .border_color(rgb(t.border))
-            .bg(rgb(t.surface))
-            .px(px(8.0))
-            .gap(px(4.0))
-            .text_xs()
-            .text_color(rgb(t.fg))
-            .child(
-                svg()
-                    .external_path(concat!(env!("CARGO_MANIFEST_DIR"), "/assets/icons/calendar.svg").to_string())
-                    .size(px(crate::config::ICON_SIZE))
-                    .text_color(rgb(t.fg))
-                    .flex_shrink_0(),
-            )
-            .child(self.date.clone())
+        super::capsule(
+            div()
+                .flex()
+                .items_center()
+                .px(px(8.0))
+                .gap(px(4.0))
+                .text_xs()
+                .text_color(rgb(t.fg))
+                .child(
+                    svg()
+                        .external_path(concat!(env!("CARGO_MANIFEST_DIR"), "/assets/icons/calendar.svg").to_string())
+                        .size(px(crate::config::ICON_SIZE))
+                        .text_color(rgb(t.fg))
+                        .flex_shrink_0(),
+                )
+                .child(self.date.clone()),
+            self.grouped,
+        )
     }
 }
 
