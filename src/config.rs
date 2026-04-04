@@ -2,7 +2,7 @@ use gpui::App;
 
 use crate::Bar;
 use crate::theme::{self, Theme};
-use crate::widgets::{Bluetooth, Brightness, CapsLock, Clock, CpuUsage, Date, Fcitx, Minimap, PkgUpdate, Power, PowerDraw, Tray, Volume, Wifi, Widget, WindowTitle, Workspaces};
+use crate::widgets::{Bluetooth, Brightness, CapsLock, Clock, CpuFreq, CpuTemp, CpuUsage, Date, Fcitx, Memory, Minimap, PkgUpdate, Power, PowerDraw, Tray, Volume, Wifi, Widget, WindowTitle, Workspaces};
 
 pub(crate) const THEME: &Theme = &theme::NORD;
 
@@ -36,7 +36,7 @@ pub(crate) fn bar(cx: &mut App) -> Bar {
     Bar {
         left: widgets!(cx, Workspaces, Minimap, WindowTitle),
         center_left: widgets!(cx,),
-        center: widgets!(cx, CpuUsage, Clock, Date, Wifi, Bluetooth, PkgUpdate, PowerDraw),
+        center: widgets!(cx, CpuFreq, CpuUsage, CpuTemp, Memory, Clock, Date, Wifi, Bluetooth, PkgUpdate, PowerDraw),
         center_right: widgets!(cx,),
         right: widgets!(cx, Volume, Brightness, Tray, Fcitx, CapsLock, Power),
     }
