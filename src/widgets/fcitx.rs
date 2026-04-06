@@ -30,19 +30,17 @@ fn query_fcitx() -> InputMethod {
 
 pub struct Fcitx {
     im: InputMethod,
+    grouped: bool,
 }
 
 impl BarWidget for Fcitx {
     const NAME: &str = "fcitx";
 
     fn new(cx: &mut Context<Self>) -> Self {
-        // Subscribe to tray events — fcitx updates its SNI on input method switch
         let rx = super::tray::subscribe_tray();
 
-        // Event-driven: wakes only when tray fires an event, then queries fcitx
         cx.spawn(async move |this, cx| {
             while rx.recv().await.is_ok() {
-                // query_fcitx() is blocking but fast (single process call)
                 let new_im = query_fcitx();
 
                 if this
@@ -62,12 +60,16 @@ impl BarWidget for Fcitx {
 
         Self {
             im: query_fcitx(),
+            grouped: false,
         }
+    }
+
+    fn set_grouped(&mut self) {
+        self.grouped = true;
     }
 
     fn render(&mut self, _window: &mut Window, _cx: &mut Context<Self>) -> impl IntoElement {
         let t = crate::config::THEME;
-        let content_h = crate::config::CONTENT_HEIGHT;
 
         let (label, color) = match self.im {
             InputMethod::Chinese => ("中", t.purple),
@@ -75,17 +77,18 @@ impl BarWidget for Fcitx {
             InputMethod::Unknown => ("?", t.yellow),
         };
 
-        div()
-            .flex()
-            .items_center()
-            .justify_center()
-            .h(px(content_h))
-            .px(px(6.0))
-            .bg(rgb(t.border))
-            .text_color(rgb(color))
-            .font_weight(gpui::FontWeight::BOLD)
-            .text_xs()
-            .child(label)
+        super::capsule(
+            div()
+                .flex()
+                .items_center()
+                .justify_center()
+                .px(px(6.0))
+                .text_color(rgb(color))
+                .font_weight(gpui::FontWeight::BOLD)
+                .text_xs()
+                .child(label),
+            self.grouped,
+        )
     }
 }
 

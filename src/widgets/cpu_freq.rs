@@ -1,15 +1,13 @@
-//! CPU frequency + GPU busy % widget.
+//! CPU frequency widget.
 //!
 //! Detects hybrid P/E core topology (Intel core_type sysfs or max_freq split).
 //! Displays:
 //!   - Hybrid: "P: X.XX GHz | E: X.XX GHz"
 //!   - Uniform: "X.XX GHz"
-//!   - GPU suffix: "| Gfx X%" (AMD gpu_busy_percent or Intel gt_busy_percent)
 //!
 //! Reads every second via `timerfd` + `epoll`. All sysfs, zero subprocesses.
 
 use std::os::fd::{AsRawFd, FromRawFd, OwnedFd};
-use std::path::PathBuf;
 
 use gpui::{Context, IntoElement, ParentElement, Styled, Window, div, px, rgb, svg};
 
@@ -25,24 +23,13 @@ enum CoreLayout {
     Hybrid { p_cpus: Vec<u32>, e_cpus: Vec<u32> },
 }
 
-struct GpuBusy {
-    path: PathBuf,
-    label: String,
-}
-
-struct FreqSources {
-    layout: CoreLayout,
-    gpu: Option<GpuBusy>,
-}
-
-fn detect_freq_sources() -> FreqSources {
+fn detect_layout() -> CoreLayout {
     let mut p_cpus = Vec::new();
     let mut e_cpus = Vec::new();
     let has_core_type =
         std::path::Path::new("/sys/devices/system/cpu/cpu0/topology/core_type").exists();
 
     if has_core_type {
-        // Intel hybrid: core_type 1=P, 0=E
         for entry in std::fs::read_dir("/sys/devices/system/cpu").into_iter().flatten() {
             let entry = match entry {
                 Ok(e) => e,
@@ -50,9 +37,6 @@ fn detect_freq_sources() -> FreqSources {
             };
             let name = entry.file_name();
             let name = name.to_str().unwrap_or("");
-            if !name.starts_with("cpu") {
-                continue;
-            }
             let num: u32 = match name.strip_prefix("cpu").and_then(|s| s.parse().ok()) {
                 Some(n) => n,
                 None => continue,
@@ -66,7 +50,6 @@ fn detect_freq_sources() -> FreqSources {
             }
         }
     } else {
-        // Check for hybrid via max_freq split (≥1.2x ratio)
         let mut all_cpus: Vec<(u32, u64)> = Vec::new();
         for entry in std::fs::read_dir("/sys/devices/system/cpu").into_iter().flatten() {
             let entry = match entry {
@@ -116,58 +99,11 @@ fn detect_freq_sources() -> FreqSources {
     p_cpus.sort_unstable();
     e_cpus.sort_unstable();
 
-    let layout = if e_cpus.is_empty() {
+    if e_cpus.is_empty() {
         CoreLayout::Uniform { cpus: p_cpus }
     } else {
         CoreLayout::Hybrid { p_cpus, e_cpus }
-    };
-
-    // GPU busy detection
-    let gpu = detect_gpu_busy();
-
-    let desc = match &layout {
-        CoreLayout::Uniform { cpus } => format!("uniform {} cores", cpus.len()),
-        CoreLayout::Hybrid { p_cpus, e_cpus } => {
-            format!("hybrid {}P+{}E cores", p_cpus.len(), e_cpus.len())
-        }
-    };
-    log::info!(
-        "cpu_freq: {desc}, gpu={}",
-        gpu.as_ref().map_or("none".into(), |g| g.label.clone())
-    );
-
-    FreqSources { layout, gpu }
-}
-
-fn detect_gpu_busy() -> Option<GpuBusy> {
-    for entry in std::fs::read_dir("/sys/class/drm").ok()?.filter_map(Result::ok) {
-        let dev = entry.path().join("device");
-        if !dev.is_dir() {
-            continue;
-        }
-        let vendor = std::fs::read_to_string(dev.join("vendor")).unwrap_or_default();
-        let class = std::fs::read_to_string(dev.join("class")).unwrap_or_default();
-        if !class.trim().starts_with("0x03") {
-            continue;
-        }
-
-        let (label, files) = match vendor.trim() {
-            "0x1002" => ("Gfx", vec!["gpu_busy_percent"]),
-            "0x8086" => ("iGPU", vec!["gpu_busy_percent", "gt_busy_percent"]),
-            _ => continue,
-        };
-
-        for f in files {
-            let path = dev.join(f);
-            if path.exists() && std::fs::read_to_string(&path).is_ok() {
-                return Some(GpuBusy {
-                    path,
-                    label: label.to_string(),
-                });
-            }
-        }
     }
-    None
 }
 
 // ── reading ────────────────────────────────────────────────────────────
@@ -191,54 +127,26 @@ fn read_avg_freq_khz(cpus: &[u32]) -> u64 {
     if count > 0 { total / count } else { 0 }
 }
 
-fn read_gpu_busy(gpu: &GpuBusy) -> Option<u32> {
-    std::fs::read_to_string(&gpu.path)
-        .ok()?
-        .trim()
-        .parse()
-        .ok()
-}
-
 fn khz_to_ghz_str(khz: u64) -> String {
     format!("{}.{:02}", khz / 1_000_000, (khz % 1_000_000) / 10_000)
 }
 
-// ── state ──────────────────────────────────────────────────────────────
-
-const ICON_GPU_BUSY: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/assets/icons/gpu-busy.svg");
-
-#[derive(Clone)]
-struct FreqReading {
-    text: String,
-    gpu_pct: Option<u32>,
-}
-
-fn take_reading(src: &FreqSources) -> FreqReading {
-    let text = match &src.layout {
+fn take_reading(layout: &CoreLayout) -> String {
+    match layout {
         CoreLayout::Uniform { cpus } => {
-            let avg = read_avg_freq_khz(cpus);
-            format!("{} GHz", khz_to_ghz_str(avg))
+            format!("{} GHz", khz_to_ghz_str(read_avg_freq_khz(cpus)))
         }
         CoreLayout::Hybrid { p_cpus, e_cpus } => {
             let p = read_avg_freq_khz(p_cpus);
             let e = read_avg_freq_khz(e_cpus);
             format!("P:{} | E:{}", khz_to_ghz_str(p), khz_to_ghz_str(e))
         }
-    };
-
-    let gpu_pct = src
-        .gpu
-        .as_ref()
-        .and_then(|g| read_gpu_busy(g));
-
-    FreqReading { text, gpu_pct }
+    }
 }
 
 // ── timerfd + epoll monitor ────────────────────────────────────────────
 
-fn freq_monitor(tx: async_channel::Sender<FreqReading>) {
-    let src = detect_freq_sources();
-
+fn freq_monitor(layout: CoreLayout, tx: async_channel::Sender<String>) {
     let tfd = unsafe { libc::timerfd_create(libc::CLOCK_MONOTONIC, libc::TFD_CLOEXEC) };
     if tfd < 0 { return; }
     let tfd = unsafe { OwnedFd::from_raw_fd(tfd) };
@@ -266,15 +174,15 @@ fn freq_monitor(tx: async_channel::Sender<FreqReading>) {
         let mut buf = [0u8; 8];
         unsafe { libc::read(tfd.as_raw_fd(), buf.as_mut_ptr().cast(), 8) };
 
-        let reading = take_reading(&src);
-        if tx.try_send(reading).is_err() && tx.is_closed() { break; }
+        let text = take_reading(&layout);
+        if tx.try_send(text).is_err() && tx.is_closed() { break; }
     }
 }
 
 // ── widget ─────────────────────────────────────────────────────────────
 
 pub struct CpuFreq {
-    reading: FreqReading,
+    text: String,
     grouped: bool,
 }
 
@@ -282,26 +190,32 @@ impl BarWidget for CpuFreq {
     const NAME: &str = "cpu-freq";
 
     fn new(cx: &mut Context<Self>) -> Self {
-        let (tx, rx) = async_channel::bounded::<FreqReading>(1);
+        let layout = detect_layout();
+        let desc = match &layout {
+            CoreLayout::Uniform { cpus } => format!("uniform {} cores", cpus.len()),
+            CoreLayout::Hybrid { p_cpus, e_cpus } => {
+                format!("hybrid {}P+{}E cores", p_cpus.len(), e_cpus.len())
+            }
+        };
+        log::info!("cpu_freq: {desc}");
+
+        let (tx, rx) = async_channel::bounded::<String>(1);
 
         std::thread::Builder::new()
             .name("cpu-freq".into())
-            .spawn(move || freq_monitor(tx))
+            .spawn(move || freq_monitor(layout, tx))
             .ok();
 
         cx.spawn(async move |this, cx| {
-            while let Ok(reading) = rx.recv().await {
-                if this.update(cx, |this, cx| { this.reading = reading; cx.notify(); }).is_err() {
+            while let Ok(text) = rx.recv().await {
+                if this.update(cx, |this, cx| { this.text = text; cx.notify(); }).is_err() {
                     break;
                 }
             }
         }).detach();
 
         Self {
-            reading: FreqReading {
-                text: String::new(),
-                gpu_pct: None,
-            },
+            text: String::new(),
             grouped: false,
         }
     }
@@ -311,41 +225,6 @@ impl BarWidget for CpuFreq {
     fn render(&mut self, _window: &mut Window, _cx: &mut Context<Self>) -> impl IntoElement {
         let t = crate::config::THEME;
         let icon_size = crate::config::ICON_SIZE;
-        let r = &self.reading;
-
-        let sep = || div().text_color(rgb(t.border)).child("│");
-
-        let mut row = div()
-            .flex()
-            .items_center()
-            .gap(px(4.0))
-            .child(
-                svg()
-                    .external_path(ICON_FREQ.to_string())
-                    .size(px(icon_size))
-                    .text_color(rgb(t.fg))
-                    .flex_shrink_0(),
-            )
-            .child(div().text_color(rgb(t.fg)).child(r.text.clone()));
-
-        if let Some(pct) = r.gpu_pct {
-            row = row
-                .child(sep())
-                .child(
-                    div()
-                        .flex()
-                        .items_center()
-                        .gap(px(3.0))
-                        .child(
-                            svg()
-                                .external_path(ICON_GPU_BUSY.to_string())
-                                .size(px(icon_size))
-                                .text_color(rgb(t.text_dim))
-                                .flex_shrink_0(),
-                        )
-                        .child(div().text_color(rgb(t.text_dim)).child(format!("{pct}%"))),
-                );
-        }
 
         super::capsule(
             div()
@@ -353,7 +232,15 @@ impl BarWidget for CpuFreq {
                 .items_center()
                 .px(px(4.0))
                 .text_xs()
-                .child(row),
+                .gap(px(4.0))
+                .child(
+                    svg()
+                        .external_path(ICON_FREQ.to_string())
+                        .size(px(icon_size))
+                        .text_color(rgb(t.fg))
+                        .flex_shrink_0(),
+                )
+                .child(div().text_color(rgb(t.fg)).child(self.text.clone())),
             self.grouped,
         )
     }

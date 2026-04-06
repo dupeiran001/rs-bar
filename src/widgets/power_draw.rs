@@ -1,13 +1,13 @@
-//! Power draw widget.
+//! Power draw widgets — individual, composable via `group!()`.
 //!
-//! Mirrors the logic of `~/.config/waybar/scripts/power-draw.sh`:
-//! battery, RAPL (CPU package + PSYS/platform), dGPU hwmon.
-//! All reads are sysfs — zero subprocesses (nvidia-smi as last resort).
+//! Four independent widgets, each with its own timerfd + epoll monitor:
+//!   - `BatteryDraw` — battery discharge/charge watts
+//!   - `CpuDraw`     — CPU package watts (RAPL or macsmc Heatpipe)
+//!   - `PsysDraw`    — platform/system watts (RAPL psys or macsmc Total System)
+//!   - `GpuDraw`     — discrete GPU watts (hwmon or nvidia-smi)
 //!
-//! Uses `timerfd` + `epoll` for a 2-second sampling interval.
-//! Energy counters are delta'd to compute watts.
+//! All reads are sysfs — zero subprocesses (nvidia-smi as last resort for GPU).
 
-use std::collections::HashMap;
 use std::os::fd::{AsRawFd, FromRawFd, OwnedFd};
 use std::path::{Path, PathBuf};
 use std::time::Instant;
@@ -22,6 +22,10 @@ fn sysfs_u64(path: &Path) -> Option<u64> {
     std::fs::read_to_string(path).ok()?.trim().parse().ok()
 }
 
+fn sysfs_i64(path: &Path) -> Option<i64> {
+    std::fs::read_to_string(path).ok()?.trim().parse().ok()
+}
+
 fn sysfs_str(path: &Path) -> String {
     std::fs::read_to_string(path)
         .map(|s| s.trim().to_string())
@@ -32,7 +36,60 @@ fn sysfs_readable(path: &Path) -> bool {
     std::fs::read_to_string(path).is_ok()
 }
 
-// ── source detection (runs once at startup) ────────────────────────────
+// ── timerfd + epoll helper ─────────────────────────────────────────────
+
+/// Run `tick` every `interval_secs` on a timerfd + epoll loop.
+/// Returns when `tick` returns `false` (channel closed).
+fn timerfd_loop(interval_secs: i64, fire_immediately: bool, mut tick: impl FnMut() -> bool) {
+    let tfd = unsafe { libc::timerfd_create(libc::CLOCK_MONOTONIC, libc::TFD_CLOEXEC) };
+    if tfd < 0 {
+        return;
+    }
+    let tfd = unsafe { OwnedFd::from_raw_fd(tfd) };
+
+    let spec = libc::itimerspec {
+        it_interval: libc::timespec {
+            tv_sec: interval_secs,
+            tv_nsec: 0,
+        },
+        it_value: libc::timespec {
+            tv_sec: if fire_immediately { 0 } else { interval_secs },
+            tv_nsec: if fire_immediately { 1 } else { 0 },
+        },
+    };
+    unsafe { libc::timerfd_settime(tfd.as_raw_fd(), 0, &spec, std::ptr::null_mut()) };
+
+    let epfd = unsafe { libc::epoll_create1(libc::EPOLL_CLOEXEC) };
+    if epfd < 0 {
+        return;
+    }
+    let epfd = unsafe { OwnedFd::from_raw_fd(epfd) };
+
+    let mut ev = libc::epoll_event {
+        events: libc::EPOLLIN as u32,
+        u64: 0,
+    };
+    unsafe { libc::epoll_ctl(epfd.as_raw_fd(), libc::EPOLL_CTL_ADD, tfd.as_raw_fd(), &mut ev) };
+
+    loop {
+        let mut out = [libc::epoll_event { events: 0, u64: 0 }; 1];
+        let n = unsafe { libc::epoll_wait(epfd.as_raw_fd(), out.as_mut_ptr(), 1, -1) };
+        if n < 0 {
+            if std::io::Error::last_os_error().kind() == std::io::ErrorKind::Interrupted {
+                continue;
+            }
+            break;
+        }
+        let mut buf = [0u8; 8];
+        unsafe { libc::read(tfd.as_raw_fd(), buf.as_mut_ptr().cast(), 8) };
+
+        if !tick() {
+            break;
+        }
+    }
+}
+
+// ── shared types & detection ───────────────────────────────────────────
 
 struct BatteryInfo {
     dir: PathBuf,
@@ -43,11 +100,11 @@ struct RaplDomain {
     max_uj: u64,
 }
 
+#[allow(dead_code)]
 struct GpuInfo {
     power_file: Option<PathBuf>,
     energy_file: Option<PathBuf>,
     label: String,
-    is_dgpu: bool,
 }
 
 #[derive(Clone, Copy)]
@@ -56,14 +113,6 @@ enum CpuVendor {
     Amd,
     Apple,
     Unknown,
-}
-
-struct PowerSources {
-    battery: Option<BatteryInfo>,
-    cpu_vendor: CpuVendor,
-    pkg: Vec<RaplDomain>,
-    psys: Vec<RaplDomain>,
-    gpu: Option<GpuInfo>,
 }
 
 fn detect_cpu_vendor() -> CpuVendor {
@@ -77,35 +126,36 @@ fn detect_cpu_vendor() -> CpuVendor {
             }
         }
     }
-    // Apple Silicon check
     if Path::new("/sys/class/power_supply/macsmc-battery").exists()
-        || std::fs::read_to_string("/proc/cpuinfo")
-            .unwrap_or_default()
-            .contains("Apple")
+        || cpuinfo.contains("Apple")
     {
         return CpuVendor::Apple;
     }
     CpuVendor::Unknown
 }
 
-// Icon paths (resolved at compile time)
+// Icon paths
 const ICON_AMD_CPU: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/assets/icons/amd-cpu.svg");
 const ICON_INTEL_CPU: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/assets/icons/intel-cpu.svg");
 const ICON_APPLE_CHIP: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/assets/icons/apple-chip.svg");
+#[allow(dead_code)]
 const ICON_AMD_RADEON: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/assets/icons/amd-radeon.svg");
+#[allow(dead_code)]
 const ICON_NVIDIA_GPU: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/assets/icons/nvidia-gpu.svg");
-const ICON_INTEL_ARC: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/assets/icons/intel-arc-gpu.svg");
+#[allow(dead_code)]
+const ICON_INTEL_ARC: &str =
+    concat!(env!("CARGO_MANIFEST_DIR"), "/assets/icons/intel-arc-gpu.svg");
 const ICON_PSYS: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/assets/icons/psys.svg");
+const ICON_BATTERY: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/assets/icons/battery.svg");
+const ICON_BATTERY_CHARGING: &str =
+    concat!(env!("CARGO_MANIFEST_DIR"), "/assets/icons/battery-charging.svg");
 
 fn is_system_battery(dir: &Path) -> bool {
-    // Must have power_now or current_now+voltage_now to be a real system battery
-    // (filters out Logitech HID++ peripheral batteries etc.)
     dir.join("power_now").exists()
         || (dir.join("current_now").exists() && dir.join("voltage_now").exists())
 }
 
 fn detect_battery() -> Option<BatteryInfo> {
-    // Prefer well-known names, then fall back to scanning
     for name in ["BAT0", "BAT1", "macsmc-battery"] {
         let dir = Path::new("/sys/class/power_supply").join(name);
         if dir.exists() && is_system_battery(&dir) {
@@ -138,8 +188,7 @@ fn detect_rapl() -> (Vec<RaplDomain>, Vec<RaplDomain>) {
         }
         if !sysfs_readable(&ep) {
             log::warn!(
-                "power: {} exists but unreadable (run: sudo chmod a+r {} or install udev rule)",
-                ep.display(),
+                "power: {} unreadable (install udev rule or chmod a+r)",
                 ep.display(),
             );
             return;
@@ -157,13 +206,9 @@ fn detect_rapl() -> (Vec<RaplDomain>, Vec<RaplDomain>) {
         }
     };
 
-    // All domains (including subdomains like intel-rapl:0:0) are
-    // top-level symlinks in /sys/class/powercap/. No need to recurse —
-    // that would hit `device/` symlinks causing duplicates.
     for entry in entries.filter_map(Result::ok) {
         let fname = entry.file_name();
         let name = fname.to_str().unwrap_or("");
-        // Only process "intel-rapl:N" or "intel-rapl:N:M" entries
         if !name.starts_with("intel-rapl:") && !name.starts_with("intel-rapl-mmio:") {
             continue;
         }
@@ -172,6 +217,34 @@ fn detect_rapl() -> (Vec<RaplDomain>, Vec<RaplDomain>) {
     (pkg, psys)
 }
 
+/// Find macsmc_hwmon sensor path by label.
+fn detect_macsmc_sensor(label: &str) -> Option<PathBuf> {
+    let entries = std::fs::read_dir("/sys/class/hwmon").ok()?;
+    for entry in entries.filter_map(Result::ok) {
+        let hw = entry.path();
+        if sysfs_str(&hw.join("name")) != "macsmc_hwmon" {
+            continue;
+        }
+        if let Ok(files) = std::fs::read_dir(&hw) {
+            for f in files.filter_map(Result::ok) {
+                let fname = f.file_name();
+                let s = fname.to_str().unwrap_or("");
+                if !s.starts_with("power") || !s.ends_with("_label") {
+                    continue;
+                }
+                if sysfs_str(&f.path()) == label {
+                    let input = hw.join(s.replace("_label", "_input"));
+                    if sysfs_readable(&input) {
+                        return Some(input);
+                    }
+                }
+            }
+        }
+    }
+    None
+}
+
+#[allow(dead_code)]
 fn detect_gpu() -> Option<GpuInfo> {
     let mut best: Option<(GpuInfo, u32)> = None;
 
@@ -188,11 +261,11 @@ fn detect_gpu() -> Option<GpuInfo> {
         let vendor = sysfs_str(&dev.join("vendor"));
         let bus = entry.file_name().to_str().unwrap_or("").to_string();
 
-        let (label, is_dgpu, rank) = match vendor.as_str() {
-            "0x10de" => ("NVIDIA", true, 1u32),
-            "0x1002" => ("AMD", true, 1),
-            "0x8086" if bus.starts_with("0000:00:02.") => ("iGPU", false, 4),
-            "0x8086" => ("ARC", true, 2),
+        let (label, rank) = match vendor.as_str() {
+            "0x10de" => ("NVIDIA", 1u32),
+            "0x1002" => ("AMD", 1),
+            "0x8086" if bus.starts_with("0000:00:02.") => ("iGPU", 4),
+            "0x8086" => ("ARC", 2),
             _ => continue,
         };
 
@@ -207,7 +280,6 @@ fn detect_gpu() -> Option<GpuInfo> {
                     power_file: pf,
                     energy_file: ef,
                     label: label.to_string(),
-                    is_dgpu,
                 },
                 r,
             ));
@@ -215,18 +287,17 @@ fn detect_gpu() -> Option<GpuInfo> {
     }
 
     if best.is_none() && Path::new("/proc/driver/nvidia/gpus").exists() {
-        // nvidia-smi fallback
         return Some(GpuInfo {
             power_file: None,
             energy_file: None,
             label: "NVIDIA".to_string(),
-            is_dgpu: true,
         });
     }
 
     best.map(|(g, _)| g)
 }
 
+#[allow(dead_code)]
 fn find_gpu_hwmon(dev: &Path) -> (Option<PathBuf>, Option<PathBuf>) {
     let mut pf = None;
     let mut ef = None;
@@ -256,13 +327,11 @@ fn find_gpu_hwmon(dev: &Path) -> (Option<PathBuf>, Option<PathBuf>) {
         }
     };
 
-    // Direct hwmon under the PCI device
     if let Ok(entries) = std::fs::read_dir(dev.join("hwmon")) {
         for e in entries.filter_map(Result::ok) {
             scan(&e.path());
         }
     }
-    // Also check /sys/class/hwmon entries pointing to this device
     let dev_canon = std::fs::canonicalize(dev).ok();
     if let Ok(entries) = std::fs::read_dir("/sys/class/hwmon") {
         for e in entries.filter_map(Result::ok) {
@@ -276,52 +345,21 @@ fn find_gpu_hwmon(dev: &Path) -> (Option<PathBuf>, Option<PathBuf>) {
     (pf, ef)
 }
 
-fn detect_sources() -> PowerSources {
-    let battery = detect_battery();
-    let cpu_vendor = detect_cpu_vendor();
-    let (pkg, psys) = detect_rapl();
-    let gpu = detect_gpu();
-    log::info!(
-        "power: battery={} rapl_pkg={} rapl_psys={} gpu={}",
-        battery.is_some(),
-        pkg.len(),
-        psys.len(),
-        gpu.as_ref().map_or("none".into(), |g| g.label.clone()),
-    );
-    PowerSources {
-        battery,
-        cpu_vendor,
-        pkg,
-        psys,
-        gpu,
+fn read_battery(bat: &BatteryInfo) -> (f64, bool) {
+    let charging = sysfs_str(&bat.dir.join("status")) == "Charging";
+    if let Some(w) = sysfs_i64(&bat.dir.join("power_now")) {
+        return (w.unsigned_abs() as f64 / 1e6, charging);
     }
-}
-
-// ── snapshot & delta computation ───────────────────────────────────────
-
-struct Snapshot {
-    time: Instant,
-    energies: HashMap<PathBuf, u64>,
-}
-
-fn take_snapshot(src: &PowerSources) -> Snapshot {
-    let mut energies = HashMap::new();
-    for d in src.pkg.iter().chain(src.psys.iter()) {
-        if let Some(v) = sysfs_u64(&d.energy_path) {
-            energies.insert(d.energy_path.clone(), v);
-        }
+    if let (Some(ua), Some(uv)) = (
+        sysfs_i64(&bat.dir.join("current_now")),
+        sysfs_i64(&bat.dir.join("voltage_now")),
+    ) {
+        return (
+            (ua.unsigned_abs() as f64 * uv.unsigned_abs() as f64) / 1e12,
+            charging,
+        );
     }
-    if let Some(ref g) = src.gpu {
-        if let Some(ref p) = g.energy_file {
-            if let Some(v) = sysfs_u64(p) {
-                energies.insert(p.clone(), v);
-            }
-        }
-    }
-    Snapshot {
-        time: Instant::now(),
-        energies,
-    }
+    (0.0, charging)
 }
 
 fn delta_watts(cur: u64, prev: u64, max: u64, dt: f64) -> f64 {
@@ -336,361 +374,545 @@ fn delta_watts(cur: u64, prev: u64, max: u64, dt: f64) -> f64 {
     (d as f64 / 1e6) / dt
 }
 
-fn read_battery(bat: &BatteryInfo) -> (f64, bool) {
-    let charging = sysfs_str(&bat.dir.join("status")) == "Charging";
-    if let Some(uw) = sysfs_u64(&bat.dir.join("power_now")) {
-        return (uw as f64 / 1e6, charging);
-    }
-    if let (Some(ua), Some(uv)) = (
-        sysfs_u64(&bat.dir.join("current_now")),
-        sysfs_u64(&bat.dir.join("voltage_now")),
-    ) {
-        return ((ua as f64 * uv as f64) / 1e12, charging);
-    }
-    (0.0, charging)
+// ── render helpers ─────────────────────────────────────────────────────
+
+fn icon_el(path: &str, color: u32) -> impl IntoElement {
+    svg()
+        .external_path(path.to_string())
+        .size(px(crate::config::ICON_SIZE))
+        .text_color(rgb(color))
+        .flex_shrink_0()
 }
 
-fn read_gpu_direct(gpu: &GpuInfo) -> Option<f64> {
-    if let Some(ref p) = gpu.power_file {
-        return sysfs_u64(p).map(|uw| uw as f64 / 1e6);
-    }
-    // nvidia-smi fallback (only when no hwmon files exist)
-    if gpu.power_file.is_none() && gpu.energy_file.is_none() {
-        let o = std::process::Command::new("nvidia-smi")
-            .args(["--query-gpu=power.draw", "--format=csv,noheader,nounits", "-i", "0"])
-            .output()
-            .ok()?;
-        return String::from_utf8_lossy(&o.stdout).trim().parse().ok();
-    }
-    None
+fn watts_el(watts: f64, color: u32) -> impl IntoElement {
+    div()
+        .text_color(rgb(color))
+        .child(format!("{:.1}W", watts))
 }
 
-#[derive(Clone)]
-struct PowerReading {
-    battery_watts: f64,
-    battery_charging: bool,
-    has_battery: bool,
-    gpu_watts: f64,
-    gpu_label: String,
-    gpu_icon: &'static str,
-    has_dgpu: bool,
-    cpu_watts: f64,
-    cpu_vendor: CpuVendor,
-    has_cpu: bool,
-    psys_watts: f64,
-    has_psys: bool,
+fn icon_watts(icon_path: &str, watts: f64, icon_color: u32, text_color: u32) -> impl IntoElement {
+    div()
+        .flex()
+        .items_center()
+        .gap(px(3.0))
+        .child(icon_el(icon_path, icon_color))
+        .child(watts_el(watts, text_color))
 }
 
-fn compute(src: &PowerSources, prev: &Snapshot, cur: &Snapshot) -> PowerReading {
-    let dt = cur.time.duration_since(prev.time).as_secs_f64();
+fn cpu_vendor_icon(v: CpuVendor) -> &'static str {
+    match v {
+        CpuVendor::Amd => ICON_AMD_CPU,
+        CpuVendor::Intel => ICON_INTEL_CPU,
+        CpuVendor::Apple => ICON_APPLE_CHIP,
+        CpuVendor::Unknown => "",
+    }
+}
 
-    // Battery
-    let (battery_watts, battery_charging) = src
-        .battery
-        .as_ref()
-        .map(|b| read_battery(b))
-        .unwrap_or((0.0, false));
-
-    // CPU package watts (sum across sockets)
-    let cpu_watts: f64 = src
-        .pkg
-        .iter()
-        .map(|d| {
-            match (
-                cur.energies.get(&d.energy_path),
-                prev.energies.get(&d.energy_path),
-            ) {
-                (Some(&c), Some(&p)) => delta_watts(c, p, d.max_uj, dt),
-                _ => 0.0,
-            }
-        })
-        .sum();
-
-    // PSYS/platform watts
-    let psys_watts: f64 = src
-        .psys
-        .iter()
-        .map(|d| {
-            match (
-                cur.energies.get(&d.energy_path),
-                prev.energies.get(&d.energy_path),
-            ) {
-                (Some(&c), Some(&p)) => delta_watts(c, p, d.max_uj, dt),
-                _ => 0.0,
-            }
-        })
-        .sum();
-
-    // GPU watts
-    let gpu_watts = src.gpu.as_ref().map_or(0.0, |g| {
-        if let Some(w) = read_gpu_direct(g) {
-            return w;
-        }
-        if let Some(ref p) = g.energy_file {
-            if let (Some(&c), Some(&pr)) = (cur.energies.get(p), prev.energies.get(p)) {
-                return delta_watts(c, pr, u64::MAX, dt);
-            }
-        }
-        0.0
-    });
-
-    let gpu_icon = src.gpu.as_ref().map_or("", |g| match g.label.as_str() {
+#[allow(dead_code)]
+fn gpu_vendor_icon(label: &str) -> &'static str {
+    match label {
         "AMD" => ICON_AMD_RADEON,
         "NVIDIA" => ICON_NVIDIA_GPU,
         "ARC" => ICON_INTEL_ARC,
         _ => "",
-    });
-
-    PowerReading {
-        battery_watts,
-        battery_charging,
-        has_battery: src.battery.is_some(),
-        gpu_watts,
-        gpu_label: src
-            .gpu
-            .as_ref()
-            .map_or(String::new(), |g| g.label.clone()),
-        gpu_icon,
-        has_dgpu: src.gpu.as_ref().map_or(false, |g| g.is_dgpu),
-        cpu_watts,
-        cpu_vendor: src.cpu_vendor,
-        has_cpu: !src.pkg.is_empty(),
-        psys_watts,
-        has_psys: !src.psys.is_empty(),
     }
 }
 
-// ── timerfd + epoll monitor thread ─────────────────────────────────────
+// ════════════════════════════════════════════════════════════════════════
+// BatteryDraw
+// ════════════════════════════════════════════════════════════════════════
 
-fn power_monitor(tx: async_channel::Sender<PowerReading>) {
-    let src = detect_sources();
-
-    // Create timerfd (2-second interval)
-    let tfd = unsafe { libc::timerfd_create(libc::CLOCK_MONOTONIC, libc::TFD_CLOEXEC) };
-    if tfd < 0 {
-        log::warn!("power: timerfd_create: {}", std::io::Error::last_os_error());
-        return;
-    }
-    let tfd = unsafe { OwnedFd::from_raw_fd(tfd) };
-
-    let spec = libc::itimerspec {
-        it_interval: libc::timespec { tv_sec: 2, tv_nsec: 0 },
-        it_value: libc::timespec { tv_sec: 0, tv_nsec: 1 }, // fire immediately
-    };
-    unsafe { libc::timerfd_settime(tfd.as_raw_fd(), 0, &spec, std::ptr::null_mut()) };
-
-    // Epoll on the timerfd
-    let epfd = unsafe { libc::epoll_create1(libc::EPOLL_CLOEXEC) };
-    if epfd < 0 {
-        return;
-    }
-    let epfd = unsafe { OwnedFd::from_raw_fd(epfd) };
-
-    let mut ev = libc::epoll_event {
-        events: libc::EPOLLIN as u32,
-        u64: 0,
-    };
-    unsafe { libc::epoll_ctl(epfd.as_raw_fd(), libc::EPOLL_CTL_ADD, tfd.as_raw_fd(), &mut ev) };
-
-    log::info!("power: timerfd+epoll monitor started");
-
-    let mut prev = take_snapshot(&src);
-
-    loop {
-        let mut out = [libc::epoll_event { events: 0, u64: 0 }; 1];
-        let n = unsafe { libc::epoll_wait(epfd.as_raw_fd(), out.as_mut_ptr(), 1, -1) };
-        if n < 0 {
-            if std::io::Error::last_os_error().kind() == std::io::ErrorKind::Interrupted {
-                continue;
-            }
-            break;
-        }
-
-        // Consume timerfd expiration count
-        let mut buf = [0u8; 8];
-        unsafe { libc::read(tfd.as_raw_fd(), buf.as_mut_ptr().cast(), 8) };
-
-        let cur = take_snapshot(&src);
-        let reading = compute(&src, &prev, &cur);
-        prev = cur;
-
-        if tx.try_send(reading).is_err() && tx.is_closed() {
-            break;
-        }
-    }
+#[derive(Clone)]
+struct BatteryReading {
+    watts: f64,
+    charging: bool,
 }
 
-// ── widget ─────────────────────────────────────────────────────────────
-
-pub struct PowerDraw {
-    reading: PowerReading,
+pub struct BatteryDraw {
+    reading: Option<BatteryReading>,
+    grouped: bool,
 }
 
-impl BarWidget for PowerDraw {
-    const NAME: &str = "power-draw";
+impl BarWidget for BatteryDraw {
+    const NAME: &str = "battery-draw";
 
     fn new(cx: &mut Context<Self>) -> Self {
-        let (tx, rx) = async_channel::bounded::<PowerReading>(1);
+        let bat = detect_battery();
+        if let Some(bat) = bat {
+            log::info!("battery-draw: {}", bat.dir.display());
+            let (tx, rx) = async_channel::bounded::<BatteryReading>(1);
 
-        std::thread::Builder::new()
-            .name("power-draw".into())
-            .spawn(move || power_monitor(tx))
-            .ok();
+            std::thread::Builder::new()
+                .name("battery-draw".into())
+                .spawn(move || {
+                    timerfd_loop(2, true, || {
+                        let (watts, charging) = read_battery(&bat);
+                        !tx.try_send(BatteryReading { watts, charging }).is_err()
+                            || !tx.is_closed()
+                    });
+                })
+                .ok();
 
-        cx.spawn(async move |this, cx| {
-            while let Ok(reading) = rx.recv().await {
-                if this
-                    .update(cx, |this, cx| {
-                        this.reading = reading;
-                        cx.notify();
-                    })
-                    .is_err()
-                {
-                    break;
+            cx.spawn(async move |this, cx| {
+                while let Ok(r) = rx.recv().await {
+                    if this
+                        .update(cx, |this, cx| {
+                            this.reading = Some(r);
+                            cx.notify();
+                        })
+                        .is_err()
+                    {
+                        break;
+                    }
                 }
-            }
-        })
-        .detach();
+            })
+            .detach();
+        } else {
+            log::info!("battery-draw: no battery found");
+        }
 
         Self {
-            reading: PowerReading {
-                battery_watts: 0.0,
-                battery_charging: false,
-                has_battery: false,
-                gpu_watts: 0.0,
-                gpu_label: String::new(),
-                gpu_icon: "",
-                has_dgpu: false,
-                cpu_watts: 0.0,
-                cpu_vendor: CpuVendor::Unknown,
-                has_cpu: false,
-                psys_watts: 0.0,
-                has_psys: false,
-            },
+            reading: None,
+            grouped: false,
         }
+    }
+
+    fn set_grouped(&mut self) {
+        self.grouped = true;
     }
 
     fn render(&mut self, _window: &mut Window, _cx: &mut Context<Self>) -> impl IntoElement {
         let t = crate::config::THEME;
-        let content_h = crate::config::CONTENT_HEIGHT;
-        let button_h = content_h - 4.0;
-        let radius = button_h / 2.0;
-        let r = &self.reading;
 
-        let sep = || div().text_color(rgb(t.border)).child("│");
+        let Some(r) = &self.reading else {
+            return super::capsule(div(), self.grouped);
+        };
 
-        let segment = |label: &str, watts: f64, color: u32| {
+        let bat_icon = if r.charging {
+            ICON_BATTERY_CHARGING
+        } else {
+            ICON_BATTERY
+        };
+
+        super::capsule(
             div()
                 .flex()
                 .items_center()
-                .gap(px(2.0))
-                .child(div().text_color(rgb(t.text_dim)).child(label.to_string()))
-                .child(
-                    div()
-                        .text_color(rgb(color))
-                        .child(format!("{:.1}W", watts)),
-                )
-        };
-
-        let icon_size = crate::config::ICON_SIZE;
-
-        let icon_el = |path: &str, color: u32| {
-            svg()
-                .external_path(path.to_string())
-                .size(px(icon_size))
-                .text_color(rgb(color))
-                .flex_shrink_0()
-        };
-
-        let watts_el = |watts: f64, color: u32| {
-            div()
-                .text_color(rgb(color))
-                .child(format!("{:.1}W", watts))
-        };
-
-        let icon_segment = |icon_path: &str, watts: f64, icon_color: u32, text_color: u32| {
-            div()
-                .flex()
-                .items_center()
-                .gap(px(3.0))
-                .child(icon_el(icon_path, icon_color))
-                .child(watts_el(watts, text_color))
-        };
-
-        let mut row = div().flex().items_center().gap(px(4.0));
-        let mut segments = 0;
-
-        // Battery
-        if r.has_battery {
-            let icon = if r.battery_charging { "" } else { "" };
-            row = row.child(
-                div()
-                    .text_color(rgb(t.fg))
-                    .child(format!("{} {:.1}W", icon, r.battery_watts)),
-            );
-            segments += 1;
-        }
-
-        // dGPU
-        if r.has_dgpu && !r.gpu_icon.is_empty() {
-            if segments > 0 {
-                row = row.child(sep());
-            }
-            row = row.child(icon_segment(r.gpu_icon, r.gpu_watts, t.fg, t.fg));
-            segments += 1;
-        } else if r.has_dgpu {
-            if segments > 0 {
-                row = row.child(sep());
-            }
-            row = row.child(segment(&r.gpu_label, r.gpu_watts, t.fg));
-            segments += 1;
-        }
-
-        // CPU (RAPL)
-        if r.has_cpu {
-            if segments > 0 {
-                row = row.child(sep());
-            }
-            let cpu_icon = match r.cpu_vendor {
-                CpuVendor::Amd => ICON_AMD_CPU,
-                CpuVendor::Intel => ICON_INTEL_CPU,
-                CpuVendor::Apple => ICON_APPLE_CHIP,
-                CpuVendor::Unknown => "",
-            };
-            if !cpu_icon.is_empty() {
-                row = row.child(icon_segment(cpu_icon, r.cpu_watts, t.fg, t.fg));
-            } else {
-                row = row.child(segment("CPU", r.cpu_watts, t.fg));
-            }
-            segments += 1;
-        }
-
-        // PSYS
-        if r.has_psys {
-            if segments > 0 {
-                row = row.child(sep());
-            }
-            row = row.child(icon_segment(ICON_PSYS, r.psys_watts, t.fg, t.fg));
-            segments += 1;
-        }
-
-        // Nothing available
-        if segments == 0 {
-            row = row.child(div().text_color(rgb(t.fg_dark)).child("⚡ —"));
-        }
-
-        div()
-            .flex()
-            .items_center()
-            .h(px(button_h))
-            .rounded(px(radius))
-            .border_1()
-            .border_color(rgb(t.border))
-            .bg(rgb(t.surface))
-            .px(px(8.0))
-            .text_xs()
-            .child(row)
+                .px(px(4.0))
+                .text_xs()
+                .child(icon_watts(bat_icon, r.watts, t.fg, t.fg)),
+            self.grouped,
+        )
     }
 }
 
-impl_render!(PowerDraw);
+impl_render!(BatteryDraw);
+
+// ════════════════════════════════════════════════════════════════════════
+// CpuDraw — RAPL package or macsmc Heatpipe Power
+// ════════════════════════════════════════════════════════════════════════
+
+enum CpuPowerSource {
+    Rapl(Vec<RaplDomain>),
+    Macsmc(PathBuf),
+}
+
+#[derive(Clone)]
+struct CpuPowerReading {
+    watts: f64,
+    vendor: CpuVendor,
+}
+
+pub struct CpuDraw {
+    reading: Option<CpuPowerReading>,
+    grouped: bool,
+}
+
+impl BarWidget for CpuDraw {
+    const NAME: &str = "cpu-draw";
+
+    fn new(cx: &mut Context<Self>) -> Self {
+        let vendor = detect_cpu_vendor();
+        let (pkg, _) = detect_rapl();
+
+        let source = if !pkg.is_empty() {
+            Some(CpuPowerSource::Rapl(pkg))
+        } else {
+            detect_macsmc_sensor("Heatpipe Power").map(CpuPowerSource::Macsmc)
+        };
+
+        if let Some(source) = source {
+            log::info!("cpu-draw: source detected (vendor={:?})", vendor as u8);
+            let (tx, rx) = async_channel::bounded::<CpuPowerReading>(1);
+
+            std::thread::Builder::new()
+                .name("cpu-draw".into())
+                .spawn(move || {
+                    match source {
+                        CpuPowerSource::Macsmc(path) => {
+                            timerfd_loop(2, true, || {
+                                let watts = sysfs_u64(&path)
+                                    .map(|uw| uw as f64 / 1e6)
+                                    .unwrap_or(0.0);
+                                !tx.try_send(CpuPowerReading { watts, vendor }).is_err()
+                                    || !tx.is_closed()
+                            });
+                        }
+                        CpuPowerSource::Rapl(domains) => {
+                            // Delta-based: need previous snapshot
+                            let mut prev_time = Instant::now();
+                            let mut prev_energies: Vec<u64> = domains
+                                .iter()
+                                .map(|d| sysfs_u64(&d.energy_path).unwrap_or(0))
+                                .collect();
+
+                            timerfd_loop(2, false, || {
+                                let now = Instant::now();
+                                let dt = now.duration_since(prev_time).as_secs_f64();
+                                let mut watts = 0.0;
+                                for (i, d) in domains.iter().enumerate() {
+                                    let cur = sysfs_u64(&d.energy_path).unwrap_or(0);
+                                    watts += delta_watts(cur, prev_energies[i], d.max_uj, dt);
+                                    prev_energies[i] = cur;
+                                }
+                                prev_time = now;
+                                !tx.try_send(CpuPowerReading { watts, vendor }).is_err()
+                                    || !tx.is_closed()
+                            });
+                        }
+                    }
+                })
+                .ok();
+
+            cx.spawn(async move |this, cx| {
+                while let Ok(r) = rx.recv().await {
+                    if this
+                        .update(cx, |this, cx| {
+                            this.reading = Some(r);
+                            cx.notify();
+                        })
+                        .is_err()
+                    {
+                        break;
+                    }
+                }
+            })
+            .detach();
+        } else {
+            log::info!("cpu-draw: no source found");
+        }
+
+        Self {
+            reading: None,
+            grouped: false,
+        }
+    }
+
+    fn set_grouped(&mut self) {
+        self.grouped = true;
+    }
+
+    fn render(&mut self, _window: &mut Window, _cx: &mut Context<Self>) -> impl IntoElement {
+        let t = crate::config::THEME;
+
+        let Some(r) = &self.reading else {
+            return super::capsule(div(), self.grouped);
+        };
+
+        let icon = cpu_vendor_icon(r.vendor);
+        let content = if !icon.is_empty() {
+            div()
+                .flex()
+                .items_center()
+                .px(px(4.0))
+                .text_xs()
+                .child(icon_watts(icon, r.watts, t.fg, t.fg))
+        } else {
+            div()
+                .flex()
+                .items_center()
+                .px(px(4.0))
+                .text_xs()
+                .child(
+                    div()
+                        .flex()
+                        .items_center()
+                        .gap(px(2.0))
+                        .child(div().text_color(rgb(t.text_dim)).child("CPU"))
+                        .child(watts_el(r.watts, t.fg)),
+                )
+        };
+
+        super::capsule(content, self.grouped)
+    }
+}
+
+impl_render!(CpuDraw);
+
+// ════════════════════════════════════════════════════════════════════════
+// PsysDraw — RAPL psys/platform or macsmc Total System Power
+// ════════════════════════════════════════════════════════════════════════
+
+enum PsysPowerSource {
+    Rapl(Vec<RaplDomain>),
+    Macsmc(PathBuf),
+}
+
+#[derive(Clone)]
+struct PsysReading {
+    watts: f64,
+}
+
+pub struct PsysDraw {
+    reading: Option<PsysReading>,
+    grouped: bool,
+}
+
+impl BarWidget for PsysDraw {
+    const NAME: &str = "psys-draw";
+
+    fn new(cx: &mut Context<Self>) -> Self {
+        let (_, psys) = detect_rapl();
+
+        let source = if !psys.is_empty() {
+            Some(PsysPowerSource::Rapl(psys))
+        } else {
+            detect_macsmc_sensor("Total System Power").map(PsysPowerSource::Macsmc)
+        };
+
+        if let Some(source) = source {
+            log::info!("psys-draw: source detected");
+            let (tx, rx) = async_channel::bounded::<PsysReading>(1);
+
+            std::thread::Builder::new()
+                .name("psys-draw".into())
+                .spawn(move || {
+                    match source {
+                        PsysPowerSource::Macsmc(path) => {
+                            timerfd_loop(2, true, || {
+                                let watts = sysfs_u64(&path)
+                                    .map(|uw| uw as f64 / 1e6)
+                                    .unwrap_or(0.0);
+                                !tx.try_send(PsysReading { watts }).is_err()
+                                    || !tx.is_closed()
+                            });
+                        }
+                        PsysPowerSource::Rapl(domains) => {
+                            let mut prev_time = Instant::now();
+                            let mut prev_energies: Vec<u64> = domains
+                                .iter()
+                                .map(|d| sysfs_u64(&d.energy_path).unwrap_or(0))
+                                .collect();
+
+                            timerfd_loop(2, false, || {
+                                let now = Instant::now();
+                                let dt = now.duration_since(prev_time).as_secs_f64();
+                                let mut watts = 0.0;
+                                for (i, d) in domains.iter().enumerate() {
+                                    let cur = sysfs_u64(&d.energy_path).unwrap_or(0);
+                                    watts += delta_watts(cur, prev_energies[i], d.max_uj, dt);
+                                    prev_energies[i] = cur;
+                                }
+                                prev_time = now;
+                                !tx.try_send(PsysReading { watts }).is_err()
+                                    || !tx.is_closed()
+                            });
+                        }
+                    }
+                })
+                .ok();
+
+            cx.spawn(async move |this, cx| {
+                while let Ok(r) = rx.recv().await {
+                    if this
+                        .update(cx, |this, cx| {
+                            this.reading = Some(r);
+                            cx.notify();
+                        })
+                        .is_err()
+                    {
+                        break;
+                    }
+                }
+            })
+            .detach();
+        } else {
+            log::info!("psys-draw: no source found");
+        }
+
+        Self {
+            reading: None,
+            grouped: false,
+        }
+    }
+
+    fn set_grouped(&mut self) {
+        self.grouped = true;
+    }
+
+    fn render(&mut self, _window: &mut Window, _cx: &mut Context<Self>) -> impl IntoElement {
+        let t = crate::config::THEME;
+
+        let Some(r) = &self.reading else {
+            return super::capsule(div(), self.grouped);
+        };
+
+        super::capsule(
+            div()
+                .flex()
+                .items_center()
+                .px(px(4.0))
+                .text_xs()
+                .child(icon_watts(ICON_PSYS, r.watts, t.fg, t.fg)),
+            self.grouped,
+        )
+    }
+}
+
+impl_render!(PsysDraw);
+
+// ════════════════════════════════════════════════════════════════════════
+// GpuDraw — discrete GPU power
+// ════════════════════════════════════════════════════════════════════════
+
+#[derive(Clone)]
+#[allow(dead_code)]
+struct GpuPowerReading {
+    watts: f64,
+    label: String,
+    icon: &'static str,
+}
+
+#[allow(dead_code)]
+pub struct GpuDraw {
+    reading: Option<GpuPowerReading>,
+    grouped: bool,
+}
+
+impl BarWidget for GpuDraw {
+    const NAME: &str = "gpu-draw";
+
+    fn new(cx: &mut Context<Self>) -> Self {
+        let gpu = detect_gpu();
+
+        if let Some(gpu) = gpu {
+            log::info!("gpu-draw: {} detected", gpu.label);
+            let icon = gpu_vendor_icon(&gpu.label);
+            let label = gpu.label.clone();
+            let (tx, rx) = async_channel::bounded::<GpuPowerReading>(1);
+
+            std::thread::Builder::new()
+                .name("gpu-draw".into())
+                .spawn(move || {
+                    // For energy-based: delta tracking
+                    let mut prev_time = Instant::now();
+                    let mut prev_energy: Option<u64> = gpu
+                        .energy_file
+                        .as_ref()
+                        .and_then(|p| sysfs_u64(p));
+
+                    timerfd_loop(2, true, || {
+                        let watts = if let Some(ref p) = gpu.power_file {
+                            sysfs_u64(p).map(|uw| uw as f64 / 1e6).unwrap_or(0.0)
+                        } else if let Some(ref p) = gpu.energy_file {
+                            let now = Instant::now();
+                            let dt = now.duration_since(prev_time).as_secs_f64();
+                            let cur = sysfs_u64(p).unwrap_or(0);
+                            let w = if let Some(prev) = prev_energy {
+                                delta_watts(cur, prev, u64::MAX, dt)
+                            } else {
+                                0.0
+                            };
+                            prev_time = now;
+                            prev_energy = Some(cur);
+                            w
+                        } else {
+                            // nvidia-smi fallback
+                            std::process::Command::new("nvidia-smi")
+                                .args([
+                                    "--query-gpu=power.draw",
+                                    "--format=csv,noheader,nounits",
+                                    "-i",
+                                    "0",
+                                ])
+                                .output()
+                                .ok()
+                                .and_then(|o| {
+                                    String::from_utf8_lossy(&o.stdout).trim().parse().ok()
+                                })
+                                .unwrap_or(0.0)
+                        };
+
+                        let r = GpuPowerReading {
+                            watts,
+                            label: label.clone(),
+                            icon,
+                        };
+                        !tx.try_send(r).is_err() || !tx.is_closed()
+                    });
+                })
+                .ok();
+
+            cx.spawn(async move |this, cx| {
+                while let Ok(r) = rx.recv().await {
+                    if this
+                        .update(cx, |this, cx| {
+                            this.reading = Some(r);
+                            cx.notify();
+                        })
+                        .is_err()
+                    {
+                        break;
+                    }
+                }
+            })
+            .detach();
+        } else {
+            log::info!("gpu-draw: no dGPU found");
+        }
+
+        Self {
+            reading: None,
+            grouped: false,
+        }
+    }
+
+    fn set_grouped(&mut self) {
+        self.grouped = true;
+    }
+
+    fn render(&mut self, _window: &mut Window, _cx: &mut Context<Self>) -> impl IntoElement {
+        let t = crate::config::THEME;
+
+        let Some(r) = &self.reading else {
+            return super::capsule(div(), self.grouped);
+        };
+
+        let content = if !r.icon.is_empty() {
+            div()
+                .flex()
+                .items_center()
+                .px(px(4.0))
+                .text_xs()
+                .child(icon_watts(r.icon, r.watts, t.fg, t.fg))
+        } else {
+            div()
+                .flex()
+                .items_center()
+                .px(px(4.0))
+                .text_xs()
+                .child(
+                    div()
+                        .flex()
+                        .items_center()
+                        .gap(px(2.0))
+                        .child(div().text_color(rgb(t.text_dim)).child(r.label.clone()))
+                        .child(watts_el(r.watts, t.fg)),
+                )
+        };
+
+        super::capsule(content, self.grouped)
+    }
+}
+
+impl_render!(GpuDraw);

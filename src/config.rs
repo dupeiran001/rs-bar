@@ -3,9 +3,9 @@ use gpui::App;
 use crate::Bar;
 use crate::theme::{self, Theme};
 use crate::widgets::{
-    Bluetooth, Brightness, CapsLock, Clock, CpuFreq, CpuTemp, CpuUsage, Date, Fcitx, Memory,
-    Minimap, PkgUpdate, Power, PowerDraw, Tray, Volume, Widget, Wifi, WindowTitle, Wireguard,
-    Workspaces, group,
+    BatteryDraw, Bluetooth, Brightness, CapsLock, Clock, CpuDraw, CpuFreq, CpuTemp, CpuUsage,
+    Date, Fcitx, GpuBusy, GpuDraw, Memory, Minimap, PkgUpdate, Power, PsysDraw, Tray, Volume,
+    Widget, Wifi, WindowTitle, Wireguard, Workspaces, group,
 };
 
 pub(crate) const THEME: &Theme = &theme::NORD;
@@ -65,9 +65,21 @@ macro_rules! widgets {
 pub(crate) fn bar(cx: &mut App) -> Bar {
     Bar {
         left: widgets!(cx, Workspaces, Minimap, WindowTitle),
-        center_left: widgets!(cx, CpuFreq, group!(cx, CpuUsage, | , CpuTemp), Memory),
+        center_left: widgets!(
+            cx,
+            group!(cx, CpuFreq, |, GpuBusy),
+            group!(cx, CpuUsage, |, CpuTemp),
+            Memory
+        ),
         center: widgets!(cx, Clock),
-        center_right: widgets!(cx, Date, Wifi, Bluetooth, PkgUpdate, PowerDraw),
+        center_right: widgets!(
+            cx,
+            Date,
+            Wifi,
+            Bluetooth,
+            PkgUpdate,
+            group!(cx, BatteryDraw, |, GpuDraw, |, CpuDraw, |, PsysDraw)
+        ),
         right: widgets!(
             cx, Wireguard, Volume, Brightness, Tray, Fcitx, CapsLock, Power
         ),
