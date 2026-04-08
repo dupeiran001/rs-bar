@@ -25,9 +25,9 @@ pub(super) fn config() -> Config {
         brightness_down_cmd: "brightnessctl set 5%-",
         power_icon: concat!(env!("CARGO_MANIFEST_DIR"), "/assets/icons/power.svg"),
         wireguard_connection: "wg",
-        bar_height: 24.0,
+        bar_height: 30.0,
         border_top: t.bg,
-        border_bottom: t.border,
+        border_bottom: t.bg,
     }
 }
 
