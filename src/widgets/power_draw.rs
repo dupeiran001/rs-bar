@@ -69,7 +69,14 @@ fn timerfd_loop(interval_secs: i64, fire_immediately: bool, mut tick: impl FnMut
         events: libc::EPOLLIN as u32,
         u64: 0,
     };
-    unsafe { libc::epoll_ctl(epfd.as_raw_fd(), libc::EPOLL_CTL_ADD, tfd.as_raw_fd(), &mut ev) };
+    unsafe {
+        libc::epoll_ctl(
+            epfd.as_raw_fd(),
+            libc::EPOLL_CTL_ADD,
+            tfd.as_raw_fd(),
+            &mut ev,
+        )
+    };
 
     loop {
         let mut out = [libc::epoll_event { events: 0, u64: 0 }; 1];
@@ -126,9 +133,7 @@ fn detect_cpu_vendor() -> CpuVendor {
             }
         }
     }
-    if Path::new("/sys/class/power_supply/macsmc-battery").exists()
-        || cpuinfo.contains("Apple")
-    {
+    if Path::new("/sys/class/power_supply/macsmc-battery").exists() || cpuinfo.contains("Apple") {
         return CpuVendor::Apple;
     }
     CpuVendor::Unknown
@@ -143,12 +148,16 @@ const ICON_AMD_RADEON: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/assets/icons
 #[allow(dead_code)]
 const ICON_NVIDIA_GPU: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/assets/icons/nvidia-gpu.svg");
 #[allow(dead_code)]
-const ICON_INTEL_ARC: &str =
-    concat!(env!("CARGO_MANIFEST_DIR"), "/assets/icons/intel-arc-gpu.svg");
+const ICON_INTEL_ARC: &str = concat!(
+    env!("CARGO_MANIFEST_DIR"),
+    "/assets/icons/intel-arc-gpu.svg"
+);
 const ICON_PSYS: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/assets/icons/psys.svg");
 const ICON_BATTERY: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/assets/icons/battery.svg");
-const ICON_BATTERY_CHARGING: &str =
-    concat!(env!("CARGO_MANIFEST_DIR"), "/assets/icons/battery-charging.svg");
+const ICON_BATTERY_CHARGING: &str = concat!(
+    env!("CARGO_MANIFEST_DIR"),
+    "/assets/icons/battery-charging.svg"
+);
 
 fn is_system_battery(dir: &Path) -> bool {
     dir.join("power_now").exists()
@@ -379,15 +388,13 @@ fn delta_watts(cur: u64, prev: u64, max: u64, dt: f64) -> f64 {
 fn icon_el(path: &str, color: u32) -> impl IntoElement {
     svg()
         .external_path(path.to_string())
-        .size(px(crate::config::ICON_SIZE))
+        .size(px(crate::config::ICON_SIZE()))
         .text_color(rgb(color))
         .flex_shrink_0()
 }
 
 fn watts_el(watts: f64, color: u32) -> impl IntoElement {
-    div()
-        .text_color(rgb(color))
-        .child(format!("{:.1}W", watts))
+    div().text_color(rgb(color)).child(format!("{:.1}W", watts))
 }
 
 fn icon_watts(icon_path: &str, watts: f64, icon_color: u32, text_color: u32) -> impl IntoElement {
@@ -447,8 +454,7 @@ impl BarWidget for BatteryDraw {
                 .spawn(move || {
                     timerfd_loop(2, true, || {
                         let (watts, charging) = read_battery(&bat);
-                        !tx.try_send(BatteryReading { watts, charging }).is_err()
-                            || !tx.is_closed()
+                        !tx.try_send(BatteryReading { watts, charging }).is_err() || !tx.is_closed()
                     });
                 })
                 .ok();
@@ -482,7 +488,7 @@ impl BarWidget for BatteryDraw {
     }
 
     fn render(&mut self, _window: &mut Window, _cx: &mut Context<Self>) -> impl IntoElement {
-        let t = crate::config::THEME;
+        let t = crate::config::THEME();
 
         let Some(r) = &self.reading else {
             return super::capsule(div(), self.grouped);
@@ -551,9 +557,8 @@ impl BarWidget for CpuDraw {
                     match source {
                         CpuPowerSource::Macsmc(path) => {
                             timerfd_loop(2, true, || {
-                                let watts = sysfs_u64(&path)
-                                    .map(|uw| uw as f64 / 1e6)
-                                    .unwrap_or(0.0);
+                                let watts =
+                                    sysfs_u64(&path).map(|uw| uw as f64 / 1e6).unwrap_or(0.0);
                                 !tx.try_send(CpuPowerReading { watts, vendor }).is_err()
                                     || !tx.is_closed()
                             });
@@ -613,7 +618,7 @@ impl BarWidget for CpuDraw {
     }
 
     fn render(&mut self, _window: &mut Window, _cx: &mut Context<Self>) -> impl IntoElement {
-        let t = crate::config::THEME;
+        let t = crate::config::THEME();
 
         let Some(r) = &self.reading else {
             return super::capsule(div(), self.grouped);
@@ -628,19 +633,14 @@ impl BarWidget for CpuDraw {
                 .text_xs()
                 .child(icon_watts(icon, r.watts, t.fg, t.fg))
         } else {
-            div()
-                .flex()
-                .items_center()
-                .px(px(4.0))
-                .text_xs()
-                .child(
-                    div()
-                        .flex()
-                        .items_center()
-                        .gap(px(2.0))
-                        .child(div().text_color(rgb(t.text_dim)).child("CPU"))
-                        .child(watts_el(r.watts, t.fg)),
-                )
+            div().flex().items_center().px(px(4.0)).text_xs().child(
+                div()
+                    .flex()
+                    .items_center()
+                    .gap(px(2.0))
+                    .child(div().text_color(rgb(t.text_dim)).child("CPU"))
+                    .child(watts_el(r.watts, t.fg)),
+            )
         };
 
         super::capsule(content, self.grouped)
@@ -686,38 +686,32 @@ impl BarWidget for PsysDraw {
 
             std::thread::Builder::new()
                 .name("psys-draw".into())
-                .spawn(move || {
-                    match source {
-                        PsysPowerSource::Macsmc(path) => {
-                            timerfd_loop(2, true, || {
-                                let watts = sysfs_u64(&path)
-                                    .map(|uw| uw as f64 / 1e6)
-                                    .unwrap_or(0.0);
-                                !tx.try_send(PsysReading { watts }).is_err()
-                                    || !tx.is_closed()
-                            });
-                        }
-                        PsysPowerSource::Rapl(domains) => {
-                            let mut prev_time = Instant::now();
-                            let mut prev_energies: Vec<u64> = domains
-                                .iter()
-                                .map(|d| sysfs_u64(&d.energy_path).unwrap_or(0))
-                                .collect();
+                .spawn(move || match source {
+                    PsysPowerSource::Macsmc(path) => {
+                        timerfd_loop(2, true, || {
+                            let watts = sysfs_u64(&path).map(|uw| uw as f64 / 1e6).unwrap_or(0.0);
+                            !tx.try_send(PsysReading { watts }).is_err() || !tx.is_closed()
+                        });
+                    }
+                    PsysPowerSource::Rapl(domains) => {
+                        let mut prev_time = Instant::now();
+                        let mut prev_energies: Vec<u64> = domains
+                            .iter()
+                            .map(|d| sysfs_u64(&d.energy_path).unwrap_or(0))
+                            .collect();
 
-                            timerfd_loop(2, false, || {
-                                let now = Instant::now();
-                                let dt = now.duration_since(prev_time).as_secs_f64();
-                                let mut watts = 0.0;
-                                for (i, d) in domains.iter().enumerate() {
-                                    let cur = sysfs_u64(&d.energy_path).unwrap_or(0);
-                                    watts += delta_watts(cur, prev_energies[i], d.max_uj, dt);
-                                    prev_energies[i] = cur;
-                                }
-                                prev_time = now;
-                                !tx.try_send(PsysReading { watts }).is_err()
-                                    || !tx.is_closed()
-                            });
-                        }
+                        timerfd_loop(2, false, || {
+                            let now = Instant::now();
+                            let dt = now.duration_since(prev_time).as_secs_f64();
+                            let mut watts = 0.0;
+                            for (i, d) in domains.iter().enumerate() {
+                                let cur = sysfs_u64(&d.energy_path).unwrap_or(0);
+                                watts += delta_watts(cur, prev_energies[i], d.max_uj, dt);
+                                prev_energies[i] = cur;
+                            }
+                            prev_time = now;
+                            !tx.try_send(PsysReading { watts }).is_err() || !tx.is_closed()
+                        });
                     }
                 })
                 .ok();
@@ -751,7 +745,7 @@ impl BarWidget for PsysDraw {
     }
 
     fn render(&mut self, _window: &mut Window, _cx: &mut Context<Self>) -> impl IntoElement {
-        let t = crate::config::THEME;
+        let t = crate::config::THEME();
 
         let Some(r) = &self.reading else {
             return super::capsule(div(), self.grouped);
@@ -806,10 +800,8 @@ impl BarWidget for GpuDraw {
                 .spawn(move || {
                     // For energy-based: delta tracking
                     let mut prev_time = Instant::now();
-                    let mut prev_energy: Option<u64> = gpu
-                        .energy_file
-                        .as_ref()
-                        .and_then(|p| sysfs_u64(p));
+                    let mut prev_energy: Option<u64> =
+                        gpu.energy_file.as_ref().and_then(|p| sysfs_u64(p));
 
                     timerfd_loop(2, true, || {
                         let watts = if let Some(ref p) = gpu.power_file {
@@ -882,7 +874,7 @@ impl BarWidget for GpuDraw {
     }
 
     fn render(&mut self, _window: &mut Window, _cx: &mut Context<Self>) -> impl IntoElement {
-        let t = crate::config::THEME;
+        let t = crate::config::THEME();
 
         let Some(r) = &self.reading else {
             return super::capsule(div(), self.grouped);
@@ -896,19 +888,14 @@ impl BarWidget for GpuDraw {
                 .text_xs()
                 .child(icon_watts(r.icon, r.watts, t.fg, t.fg))
         } else {
-            div()
-                .flex()
-                .items_center()
-                .px(px(4.0))
-                .text_xs()
-                .child(
-                    div()
-                        .flex()
-                        .items_center()
-                        .gap(px(2.0))
-                        .child(div().text_color(rgb(t.text_dim)).child(r.label.clone()))
-                        .child(watts_el(r.watts, t.fg)),
-                )
+            div().flex().items_center().px(px(4.0)).text_xs().child(
+                div()
+                    .flex()
+                    .items_center()
+                    .gap(px(2.0))
+                    .child(div().text_color(rgb(t.text_dim)).child(r.label.clone()))
+                    .child(watts_el(r.watts, t.fg)),
+            )
         };
 
         super::capsule(content, self.grouped)

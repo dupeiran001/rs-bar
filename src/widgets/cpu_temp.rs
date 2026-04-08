@@ -211,8 +211,8 @@ impl BarWidget for CpuTemp {
     fn set_grouped(&mut self) { self.grouped = true; }
 
     fn render(&mut self, _window: &mut Window, _cx: &mut Context<Self>) -> impl IntoElement {
-        let t = crate::config::THEME;
-        let icon_size = crate::config::ICON_SIZE;
+        let t = crate::config::THEME();
+        let icon_size = crate::config::ICON_SIZE();
 
         let color = if self.temp >= 88 {
             t.red

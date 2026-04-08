@@ -173,8 +173,8 @@ impl BarWidget for CpuUsage {
     fn set_grouped(&mut self) { self.grouped = true; }
 
     fn render(&mut self, _window: &mut Window, _cx: &mut Context<Self>) -> impl IntoElement {
-        let t = crate::config::THEME;
-        let icon_size = crate::config::ICON_SIZE;
+        let t = crate::config::THEME();
+        let icon_size = crate::config::ICON_SIZE();
         let pct = self.usage.round() as u32;
 
         let color = if self.usage >= 80.0 {

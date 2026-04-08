@@ -164,7 +164,7 @@ struct TrayTooltip {
 
 impl Render for TrayTooltip {
     fn render(&mut self, _window: &mut Window, _cx: &mut Context<Self>) -> impl IntoElement {
-        let t = crate::config::THEME;
+        let t = crate::config::THEME();
         div()
             .bg(rgb(t.surface))
             .border_1()
@@ -220,9 +220,9 @@ impl BarWidget for Tray {
     }
 
     fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
-        let t = crate::config::THEME;
-        let content_h = crate::config::CONTENT_HEIGHT;
-        let icon_size = crate::config::ICON_SIZE;
+        let t = crate::config::THEME();
+        let content_h = crate::config::CONTENT_HEIGHT();
+        let icon_size = crate::config::ICON_SIZE();
         let button_h = content_h - 4.0;
         let radius = button_h / 2.0;
         let tray_icon_size: f32 = 12.0; // smaller to fit inside capsule
@@ -390,7 +390,7 @@ fn resolve_icon(item: &TrayItem) -> Option<std::path::PathBuf> {
         }
     }
 
-    let theme = crate::config::ICON_THEME;
+    let theme = crate::config::ICON_THEME();
 
     if let Some(name) = &item.icon_name {
         if !name.is_empty() {

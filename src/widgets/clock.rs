@@ -58,7 +58,7 @@ impl ClockPopup {
 
 impl Render for ClockPopup {
     fn render(&mut self, _window: &mut Window, _cx: &mut Context<Self>) -> impl IntoElement {
-        let t = crate::config::THEME;
+        let t = crate::config::THEME();
         div()
             .bg(rgb(t.bg))
             .border_1()
@@ -115,7 +115,7 @@ impl BarWidget for Clock {
     }
 
     fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
-        let t = crate::config::THEME;
+        let t = crate::config::THEME();
         let entity = cx.weak_entity();
 
         div()
@@ -123,7 +123,7 @@ impl BarWidget for Clock {
             .flex()
             .items_center()
             .justify_center()
-            .h(px(crate::config::CONTENT_HEIGHT))
+            .h(px(crate::config::CONTENT_HEIGHT()))
             .px_2()
             .rounded_md()
             .cursor_pointer()

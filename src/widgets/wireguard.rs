@@ -39,7 +39,7 @@ impl BarWidget for Wireguard {
     const NAME: &str = "wireguard";
 
     fn new(cx: &mut Context<Self>) -> Self {
-        let connection = crate::config::WIREGUARD_CONNECTION;
+        let connection = crate::config::WIREGUARD_CONNECTION();
         let initial = query_active(connection);
 
         let (tx, rx) = async_channel::bounded::<bool>(4);
@@ -114,8 +114,8 @@ impl BarWidget for Wireguard {
     fn set_grouped(&mut self) { self.grouped = true; }
 
     fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
-        let t = crate::config::THEME;
-        let icon_size = crate::config::ICON_SIZE;
+        let t = crate::config::THEME();
+        let icon_size = crate::config::ICON_SIZE();
 
         let (icon, color) = if self.active {
             (ICON_ON, t.green)

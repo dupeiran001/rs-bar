@@ -150,8 +150,8 @@ impl BarWidget for Minimap {
     }
 
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
-        let t = crate::config::THEME;
-        let content_h = crate::config::CONTENT_HEIGHT;
+        let t = crate::config::THEME();
+        let content_h = crate::config::CONTENT_HEIGHT();
         let output_name = self.output_for_display(window, cx);
         let active_ws_id = self.active_workspace_id(&output_name);
 

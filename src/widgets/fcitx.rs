@@ -69,7 +69,7 @@ impl BarWidget for Fcitx {
     }
 
     fn render(&mut self, _window: &mut Window, _cx: &mut Context<Self>) -> impl IntoElement {
-        let t = crate::config::THEME;
+        let t = crate::config::THEME();
 
         let (label, color) = match self.im {
             InputMethod::Chinese => ("中", t.purple),

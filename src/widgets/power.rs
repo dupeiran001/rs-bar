@@ -15,9 +15,9 @@ impl BarWidget for Power {
     }
 
     fn render(&mut self, _window: &mut Window, _cx: &mut Context<Self>) -> impl IntoElement {
-        let t = crate::config::THEME;
-        let content_h = crate::config::CONTENT_HEIGHT;
-        let command = crate::config::POWER_COMMAND;
+        let t = crate::config::THEME();
+        let content_h = crate::config::CONTENT_HEIGHT();
+        let command = crate::config::POWER_COMMAND();
         let button_h = content_h - 4.0;
         let radius = (button_h - 2.0) / 2.0;
         let shadow_color = rgb(t.bg).into();
@@ -57,7 +57,7 @@ impl BarWidget for Power {
                     })
                     .child(
                         svg()
-                            .external_path(crate::config::POWER_ICON.to_string())
+                            .external_path(crate::config::POWER_ICON().to_string())
                             .size(px(button_h - 4.0))
                             .text_color(rgb(t.bg)),
                     ),

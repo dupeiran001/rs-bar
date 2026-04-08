@@ -25,7 +25,7 @@ struct SharedState {
 
 /// Look up an app icon via linicon (theme + fallback), .desktop files, and pixmaps.
 fn lookup_icon(app_id: &str) -> Option<PathBuf> {
-    let theme = crate::config::ICON_THEME;
+    let theme = crate::config::ICON_THEME();
     let short = app_id.rsplit('.').next().unwrap_or(app_id);
     let candidates = [
         app_id.to_string(),
@@ -248,9 +248,9 @@ impl BarWidget for WindowTitle {
     }
 
     fn render(&mut self, _window: &mut Window, _cx: &mut Context<Self>) -> impl IntoElement {
-        let t = crate::config::THEME;
-        let content_h = crate::config::CONTENT_HEIGHT;
-        let icon_size = crate::config::ICON_SIZE;
+        let t = crate::config::THEME();
+        let content_h = crate::config::CONTENT_HEIGHT();
+        let icon_size = crate::config::ICON_SIZE();
 
         div()
             .flex()

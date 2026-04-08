@@ -20,7 +20,7 @@ struct BrightnessServer {
 }
 
 fn query_brightness() -> BrightnessState {
-    let cmd = &crate::config::BRIGHTNESS_GET_CMD;
+    let cmd = &crate::config::BRIGHTNESS_GET_CMD();
     let output = std::process::Command::new("sh").args(["-c", cmd]).output();
     let percent = match output {
         Ok(o) => {
@@ -143,9 +143,9 @@ impl BarWidget for Brightness {
     }
 
     fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
-        let t = crate::config::THEME;
-        let content_h = crate::config::CONTENT_HEIGHT;
-        let icon_size = crate::config::ICON_SIZE;
+        let t = crate::config::THEME();
+        let content_h = crate::config::CONTENT_HEIGHT();
+        let icon_size = crate::config::ICON_SIZE();
         let entity = cx.weak_entity();
         let pct = self.state.percent;
         let expanded = self.show_expanded;
@@ -211,8 +211,8 @@ impl BarWidget for Brightness {
             }
         }
 
-        let up_cmd = crate::config::BRIGHTNESS_UP_CMD;
-        let down_cmd = crate::config::BRIGHTNESS_DOWN_CMD;
+        let up_cmd = crate::config::BRIGHTNESS_UP_CMD();
+        let down_cmd = crate::config::BRIGHTNESS_DOWN_CMD();
 
         div()
             .id("brightness")

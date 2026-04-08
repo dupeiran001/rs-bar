@@ -240,8 +240,8 @@ impl BarWidget for CapsLock {
     }
 
     fn render(&mut self, _window: &mut Window, _cx: &mut Context<Self>) -> impl IntoElement {
-        let t = crate::config::THEME;
-        let content_h = crate::config::CONTENT_HEIGHT;
+        let t = crate::config::THEME();
+        let content_h = crate::config::CONTENT_HEIGHT();
 
         if self.on {
             div()
@@ -257,7 +257,7 @@ impl BarWidget for CapsLock {
                             concat!(env!("CARGO_MANIFEST_DIR"), "/assets/icons/capslock.svg")
                                 .to_string(),
                         )
-                        .size(px(crate::config::ICON_SIZE))
+                        .size(px(crate::config::ICON_SIZE()))
                         .text_color(rgb(t.yellow)),
                 )
         } else {

@@ -24,73 +24,86 @@ pub(crate) struct Bar {
 
 impl Render for Bar {
     fn render(&mut self, _window: &mut Window, _cx: &mut Context<Self>) -> impl gpui::IntoElement {
-        let t = config::THEME;
+        let t = config::THEME();
         div()
             .relative()
-            .h(px(config::BAR_HEIGHT))
+            .h(px(config::BAR_HEIGHT()))
             .w_full()
             .bg(rgb(t.bg))
             .text_color(rgb(t.fg))
-            .font_family(config::FONT_FAMILY)
+            .font_family(config::FONT_FAMILY())
             .font_weight(FontWeight::SEMIBOLD)
             .text_xs()
-            // Content row: left | center_left | center (fixed) | center_right | right
+            // Content row: [left-half] [center] [right-half]
+            // Both halves are flex_1 so center stays exactly in the middle.
             .child(
                 div()
                     .flex()
                     .h_full()
-                    // Left group: takes available space, content aligned left
+                    // Left half: left + center_left
                     .child(
                         div()
                             .flex()
                             .flex_1()
                             .overflow_hidden()
-                            .items_center()
-                            .gap_2()
-                            .children(self.left.iter().map(|w| w.view().clone())),
+                            .h_full()
+                            // Left group
+                            .child(
+                                div()
+                                    .flex()
+                                    .flex_1()
+                                    .overflow_hidden()
+                                    .items_center()
+                                    .gap_2()
+                                    .children(self.left.iter().map(|w| w.view().clone())),
+                            )
+                            // Center-left group: pushed to the right
+                            .child(
+                                div()
+                                    .flex()
+                                    .flex_shrink_0()
+                                    .items_center()
+                                    .gap_2()
+                                    .px_2()
+                                    .children(self.center_left.iter().map(|w| w.view().clone())),
+                            ),
                     )
-                    // Center-left group: takes available space, content aligned right
+                    // Center group: fixed width, exactly in the middle
                     .child(
                         div()
                             .flex()
-                            .flex_1()
-                            .overflow_hidden()
-                            .justify_end()
+                            .flex_shrink_0()
                             .items_center()
-                            .gap_2()
-                            .children(self.center_left.iter().map(|w| w.view().clone())),
-                    )
-                    // Center group: auto width, always exactly centered
-                    .child(
-                        div()
-                            .flex()
-                            .overflow_hidden()
-                            .items_center()
-                            .gap_2()
-                            .px_2()
                             .children(self.center.iter().map(|w| w.view().clone())),
                     )
-                    // Center-right group: takes available space, content aligned left
+                    // Right half: center_right + right
                     .child(
                         div()
                             .flex()
                             .flex_1()
                             .overflow_hidden()
-                            .items_center()
-                            .gap_2()
-                            .children(self.center_right.iter().map(|w| w.view().clone())),
-                    )
-                    // Right group: takes available space, content aligned right
-                    .child(
-                        div()
-                            .flex()
-                            .flex_1()
-                            .overflow_hidden()
-                            .justify_end()
-                            .items_center()
-                            .gap_2()
-                            .px_2()
-                            .children(self.right.iter().map(|w| w.view().clone())),
+                            .h_full()
+                            // Center-right group
+                            .child(
+                                div()
+                                    .flex()
+                                    .flex_shrink_0()
+                                    .items_center()
+                                    .gap_2()
+                                    .px_2()
+                                    .children(self.center_right.iter().map(|w| w.view().clone())),
+                            )
+                            // Right group: pushed to the right
+                            .child(
+                                div()
+                                    .flex()
+                                    .flex_1()
+                                    .justify_end()
+                                    .items_center()
+                                    .gap_2()
+                                    .px_2()
+                                    .children(self.right.iter().map(|w| w.view().clone())),
+                            ),
                     ),
             )
             // Top border overlay — painted last, always on top
@@ -101,7 +114,7 @@ impl Render for Bar {
                     .left_0()
                     .w_full()
                     .h(px(1.0))
-                    .bg(rgb(config::BORDER_TOP)),
+                    .bg(rgb(config::BORDER_TOP())),
             )
             // Bottom border overlay
             .child(
@@ -111,7 +124,7 @@ impl Render for Bar {
                     .left_0()
                     .w_full()
                     .h(px(1.0))
-                    .bg(rgb(config::BORDER_BOTTOM)),
+                    .bg(rgb(config::BORDER_BOTTOM())),
             )
     }
 }
@@ -124,7 +137,7 @@ fn open_bar(display_id: Option<gpui::DisplayId>, cx: &mut App) {
                 namespace: "bar".to_string(),
                 layer: Layer::Top,
                 anchor: Anchor::LEFT | Anchor::RIGHT | Anchor::TOP,
-                exclusive_zone: Some(px(config::BAR_HEIGHT)),
+                exclusive_zone: Some(px(config::BAR_HEIGHT())),
                 exclusive_edge: None,
                 margin: None,
                 keyboard_interactivity: KeyboardInteractivity::None,
@@ -137,7 +150,7 @@ fn open_bar(display_id: Option<gpui::DisplayId>, cx: &mut App) {
             app_id: Some("mybar".into()),
             window_bounds: Some(WindowBounds::Windowed(Bounds {
                 origin: point(px(0.), px(0.)),
-                size: size(px(1.), px(config::BAR_HEIGHT)),
+                size: size(px(1.), px(config::BAR_HEIGHT())),
             })),
             ..Default::default()
         },
@@ -168,6 +181,8 @@ fn main() {
         }
         default_hook(info);
     }));
+
+    config::init();
 
     application().run(|cx: &mut App| {
         niri::start_listener(cx);

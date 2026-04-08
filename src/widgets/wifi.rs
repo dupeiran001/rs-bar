@@ -574,7 +574,7 @@ impl BarWidget for Wifi {
     }
 
     fn render(&mut self, _window: &mut Window, _cx: &mut Context<Self>) -> impl IntoElement {
-        let t = crate::config::THEME;
+        let t = crate::config::THEME();
 
         let icon_path = wifi_icon(&self.state);
         let color = match &self.state {
@@ -593,7 +593,7 @@ impl BarWidget for Wifi {
                 .child(
                     svg()
                         .external_path(icon_path.to_string())
-                        .size(px(crate::config::ICON_SIZE))
+                        .size(px(crate::config::ICON_SIZE()))
                         .text_color(rgb(color))
                         .flex_shrink_0(),
                 ),

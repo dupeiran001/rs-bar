@@ -10,6 +10,7 @@ mod fcitx;
 mod gpu_busy;
 mod memory;
 mod minimap;
+mod notch;
 mod pkg_update;
 mod power;
 mod power_draw;
@@ -32,6 +33,7 @@ pub use fcitx::Fcitx;
 pub use gpu_busy::GpuBusy;
 pub use memory::Memory;
 pub use minimap::Minimap;
+pub use notch::Notch;
 pub use pkg_update::PkgUpdate;
 pub use power::Power;
 #[allow(unused_imports)]
@@ -124,13 +126,14 @@ struct WidgetGroup {
 
 impl Render for WidgetGroup {
     fn render(&mut self, _window: &mut Window, _cx: &mut Context<Self>) -> impl IntoElement {
-        let t = crate::config::THEME;
-        let content_h = crate::config::CONTENT_HEIGHT;
+        let t = crate::config::THEME();
+        let content_h = crate::config::CONTENT_HEIGHT();
         let button_h = content_h - 4.0;
         let radius = button_h / 2.0;
 
         let mut row = div()
             .flex()
+            .flex_shrink_0()
             .items_center()
             .h(px(button_h))
             .rounded(px(radius))
@@ -191,8 +194,8 @@ pub(crate) fn capsule(el: gpui::Div, grouped: bool) -> gpui::Div {
     if grouped {
         el
     } else {
-        let t = crate::config::THEME;
-        let content_h = crate::config::CONTENT_HEIGHT;
+        let t = crate::config::THEME();
+        let content_h = crate::config::CONTENT_HEIGHT();
         let button_h = content_h - 4.0;
         let radius = button_h / 2.0;
         el.h(px(button_h))
