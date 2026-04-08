@@ -2,6 +2,8 @@ use gpui::App;
 
 use crate::Bar;
 use crate::theme;
+use crate::widgets::GpuBusy;
+use crate::widgets::GpuDraw;
 use crate::widgets::{
     Bluetooth, Brightness, CapsLock, Clock, CpuDraw, CpuFreq, CpuTemp, CpuUsage, Date, Fcitx,
     Memory, Minimap, PkgUpdate, Power, PsysDraw, Tray, Volume, Widget, Wifi, WindowTitle,
@@ -34,7 +36,8 @@ pub(super) fn bar(cx: &mut App) -> Bar {
         left: widgets!(cx, Workspaces, Minimap, WindowTitle),
         center_left: widgets!(
             cx,
-            group!(cx, CpuFreq, |, CpuUsage, |, CpuTemp),
+            group!(cx, CpuFreq, | , GpuBusy),
+            group!(cx, CpuUsage, |, CpuTemp),
             Memory
         ),
         center: widgets!(cx, Clock),
@@ -44,7 +47,7 @@ pub(super) fn bar(cx: &mut App) -> Bar {
             Wifi,
             Bluetooth,
             PkgUpdate,
-            group!(cx, CpuDraw, |, PsysDraw)
+            group!(cx, GpuDraw, |, CpuDraw)
         ),
         right: widgets!(
             cx, Wireguard, Volume, Brightness, Tray, Fcitx, CapsLock, Power

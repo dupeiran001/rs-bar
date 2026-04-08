@@ -18,15 +18,15 @@ use super::{BarWidget, impl_render};
 
 // ── sysfs helpers ──────────────────────────────────────────────────────
 
-fn sysfs_u64(path: &Path) -> Option<u64> {
+pub(crate) fn sysfs_u64(path: &Path) -> Option<u64> {
     std::fs::read_to_string(path).ok()?.trim().parse().ok()
 }
 
-fn sysfs_i64(path: &Path) -> Option<i64> {
+pub(crate) fn sysfs_i64(path: &Path) -> Option<i64> {
     std::fs::read_to_string(path).ok()?.trim().parse().ok()
 }
 
-fn sysfs_str(path: &Path) -> String {
+pub(crate) fn sysfs_str(path: &Path) -> String {
     std::fs::read_to_string(path)
         .map(|s| s.trim().to_string())
         .unwrap_or_default()
@@ -40,7 +40,7 @@ fn sysfs_readable(path: &Path) -> bool {
 
 /// Run `tick` every `interval_secs` on a timerfd + epoll loop.
 /// Returns when `tick` returns `false` (channel closed).
-fn timerfd_loop(interval_secs: i64, fire_immediately: bool, mut tick: impl FnMut() -> bool) {
+pub(crate) fn timerfd_loop(interval_secs: i64, fire_immediately: bool, mut tick: impl FnMut() -> bool) {
     let tfd = unsafe { libc::timerfd_create(libc::CLOCK_MONOTONIC, libc::TFD_CLOEXEC) };
     if tfd < 0 {
         return;
@@ -98,8 +98,8 @@ fn timerfd_loop(interval_secs: i64, fire_immediately: bool, mut tick: impl FnMut
 
 // ── shared types & detection ───────────────────────────────────────────
 
-struct BatteryInfo {
-    dir: PathBuf,
+pub(crate) struct BatteryInfo {
+    pub(crate) dir: PathBuf,
 }
 
 struct RaplDomain {
@@ -164,7 +164,7 @@ fn is_system_battery(dir: &Path) -> bool {
         || (dir.join("current_now").exists() && dir.join("voltage_now").exists())
 }
 
-fn detect_battery() -> Option<BatteryInfo> {
+pub(crate) fn detect_battery() -> Option<BatteryInfo> {
     for name in ["BAT0", "BAT1", "macsmc-battery"] {
         let dir = Path::new("/sys/class/power_supply").join(name);
         if dir.exists() && is_system_battery(&dir) {

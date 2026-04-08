@@ -3,8 +3,8 @@ use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use gpui::{
-    BoxShadow, Context, ElementId, InteractiveElement, IntoElement, ParentElement, PathBuilder,
-    StatefulInteractiveElement, Styled, Window, canvas, div, point, px, rgb,
+    BoxShadow, Context, ElementId, InteractiveElement, IntoElement, ParentElement,
+    StatefulInteractiveElement, Styled, Window, div, point, px, rgb,
 };
 use uuid::Uuid;
 use niri_ipc::socket::Socket;
@@ -147,110 +147,79 @@ impl BarWidget for Workspaces {
             })
             .collect();
 
-        let button_h = content_h - 2.0; // 1px breathing room each side
-        let radius = (button_h - 2.0) / 2.0;
+        let button_h = content_h - 4.0;
+        let radius = button_h / 2.0;
+        let ws_btn_h = button_h - 4.0;
+        let ws_btn_radius = ws_btn_h / 2.0;
 
         div()
             .flex()
             .flex_shrink_0()
             .items_center()
-            .h_full()
-            .child(
-                div()
+            .h(px(button_h))
+            .rounded(px(radius))
+            .border_1()
+            .border_color(rgb(t.border))
+            .bg(rgb(t.surface))
+            .gap(px(2.0))
+            .px(px(4.0))
+            .children(filtered.into_iter().map(|ws| {
+                let label = ws
+                    .name
+                    .as_deref()
+                    .map(String::from)
+                    .unwrap_or_else(|| ws.idx.to_string());
+
+                let id = ElementId::Name(format!("ws-{}", ws.id).into());
+                let ws_id = ws.id;
+
+                let mut button = div()
+                    .id(id)
                     .flex()
                     .items_center()
-                    .h_full()
-                    .bg(rgb(t.surface))
-                    .gap(px(2.0))
-                    .pl(px(6.0))
-                    .pr(px(4.0))
-                    .children(filtered.into_iter().map(|ws| {
-                        let label = ws
-                            .name
-                            .as_deref()
-                            .map(String::from)
-                            .unwrap_or_else(|| ws.idx.to_string());
+                    .justify_center()
+                    .h(px(ws_btn_h))
+                    .px(px(6.0))
+                    .text_xs()
+                    .border_1()
+                    .border_color(gpui::transparent_black())
+                    .rounded(px(ws_btn_radius))
+                    .cursor_pointer()
+                    .on_click(move |_, _, _| {
+                        let id = ws_id;
+                        std::thread::spawn(move || {
+                            if let Ok(mut socket) = Socket::connect() {
+                                let _ =
+                                    socket.send(Request::Action(Action::FocusWorkspace {
+                                        reference: WorkspaceReferenceArg::Id(id),
+                                    }));
+                            }
+                        });
+                    })
+                    .child(label);
 
-                        let id = ElementId::Name(format!("ws-{}", ws.id).into());
-                        let ws_id = ws.id;
+                if ws.is_active {
+                    let shadow_color = rgb(t.bg).into();
+                    button = button
+                        .bg(rgb(t.accent))
+                        .text_color(rgb(t.bg))
+                        .shadow(vec![BoxShadow {
+                            color: shadow_color,
+                            offset: point(px(0.), px(1.)),
+                            blur_radius: px(3.),
+                            spread_radius: px(1.),
+                        }]);
+                } else {
+                    button = button
+                        .bg(rgb(t.surface))
+                        .text_color(rgb(t.fg_dark))
+                        .hover(|s| {
+                            s.border_color(rgb(t.teal)).text_color(rgb(t.fg))
+                        });
+                }
 
-                        let mut button = div()
-                            .id(id)
-                            .flex()
-                            .items_center()
-                            .justify_center()
-                            .h(px(button_h))
-                            .px(px(8.0))
-                            .text_xs()
-                            .border_1()
-                            .border_color(gpui::transparent_black())
-                            .rounded(px(radius))
-                            .cursor_pointer()
-                            .on_click(move |_, _, _| {
-                                let id = ws_id;
-                                std::thread::spawn(move || {
-                                    if let Ok(mut socket) = Socket::connect() {
-                                        let _ =
-                                            socket.send(Request::Action(Action::FocusWorkspace {
-                                                reference: WorkspaceReferenceArg::Id(id),
-                                            }));
-                                    }
-                                });
-                            })
-                            .child(label);
-
-                        if ws.is_active {
-                            let shadow_color = rgb(t.bg).into();
-                            button = button
-                                .bg(rgb(t.accent))
-                                .text_color(rgb(t.bg))
-                                .shadow(vec![BoxShadow {
-                                    color: shadow_color,
-                                    offset: point(px(0.), px(1.)),
-                                    blur_radius: px(3.),
-                                    spread_radius: px(1.),
-                                }])
-;
-                        } else {
-                            button = button
-                                .bg(rgb(t.surface))
-                                .text_color(rgb(t.fg_dark))
-                                .hover(|s| {
-                                    s.border_color(rgb(t.teal)).text_color(rgb(t.fg))
-                                });
-                        }
-
-                        button
-                    })),
-            )
-            // Arrow separator drawn as a native triangle
-            .child({
-                let arrow_w = content_h / 2.0;
-                let arrow_h = content_h;
-                let surface_color = rgb(t.surface);
-                canvas(
-                    move |_bounds, _window, _cx| {},
-                    move |bounds, (), window, _cx| {
-                        let mut path = PathBuilder::fill();
-                        // Triangle: left-top → right-center → left-bottom
-                        path.move_to(point(bounds.origin.x, bounds.origin.y));
-                        path.line_to(point(
-                            bounds.origin.x + bounds.size.width,
-                            bounds.origin.y + bounds.size.height * 0.5,
-                        ));
-                        path.line_to(point(
-                            bounds.origin.x,
-                            bounds.origin.y + bounds.size.height,
-                        ));
-                        path.close();
-                        if let Ok(path) = path.build() {
-                            window.paint_path(path, surface_color);
-                        }
-                    },
-                )
-                .w(px(arrow_w))
-                .h(px(arrow_h))
-            })
+                button
+            }))
     }
 }
 

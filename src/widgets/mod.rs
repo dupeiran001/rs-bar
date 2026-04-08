@@ -1,3 +1,4 @@
+mod battery;
 mod bluetooth;
 mod brightness;
 mod capslock;
@@ -13,7 +14,7 @@ mod minimap;
 mod notch;
 mod pkg_update;
 mod power;
-mod power_draw;
+pub(crate) mod power_draw;
 pub(crate) mod tray;
 mod volume;
 mod wifi;
@@ -21,6 +22,7 @@ mod window_title;
 mod wireguard;
 mod workspaces;
 
+pub use battery::Battery;
 pub use bluetooth::Bluetooth;
 pub use brightness::Brightness;
 pub use capslock::CapsLock;

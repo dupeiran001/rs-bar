@@ -137,12 +137,15 @@ impl BarWidget for Wireguard {
             }
         }).detach();
 
+        let content_h = crate::config::CONTENT_HEIGHT();
+        let button_h = content_h - 4.0;
+
         super::capsule(
             div()
                 .flex()
                 .items_center()
                 .justify_center()
-                .px(px(8.0))
+                .w(px(button_h))
                 .child(
                     svg()
                         .external_path(icon.to_string())
