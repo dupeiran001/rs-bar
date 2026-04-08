@@ -25,7 +25,7 @@ pub(super) fn config() -> Config {
         wireguard_connection: "wg",
         bar_height: 38.0,
         border_top: t.bg,
-        border_bottom: t.border,
+        border_bottom: t.bg,
     }
 }
 
@@ -34,7 +34,7 @@ pub(super) fn bar(cx: &mut App) -> Bar {
         left: widgets!(cx, Workspaces, Minimap, WindowTitle),
         center_left: widgets!(
             cx,
-            group!(cx, CpuFreq, |, GpuBusy),
+            group!(cx, CpuFreq),
             group!(cx, CpuUsage, |, CpuTemp),
             Memory
         ),
@@ -46,7 +46,7 @@ pub(super) fn bar(cx: &mut App) -> Bar {
             Wifi,
             Bluetooth,
             PkgUpdate,
-            group!(cx, BatteryDraw, |, GpuDraw, |, CpuDraw, |, PsysDraw)
+            group!(cx, BatteryDraw, |, CpuDraw, |, PsysDraw)
         ),
         right: widgets!(
             cx, Wireguard, Volume, Brightness, Tray, Fcitx, CapsLock, Power

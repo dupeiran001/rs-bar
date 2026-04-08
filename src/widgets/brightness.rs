@@ -154,45 +154,54 @@ impl BarWidget for Brightness {
 
         let button_h = content_h - 4.0;
         let radius = button_h / 2.0;
-        let collapsed_w = icon_size + 8.0;
-        let expanded_w = icon_size + 8.0 + 4.0 + 32.0 + 4.0 + 28.0;
+        let collapsed_w = button_h; // at least as wide as tall for a circular look
+        let expanded_w = collapsed_w + 4.0 + 32.0 + 4.0 + 28.0 + 8.0;
         let fill = (pct as f32 / 100.0).min(1.0);
 
         let content = div()
             .flex()
             .flex_shrink_0()
             .items_center()
-            .gap(px(4.0))
             .whitespace_nowrap()
-            .px(px(4.0))
-            .child(
-                svg()
-                    .external_path(self.icon_path().to_string())
-                    .size(px(icon_size))
-                    .text_color(rgb(t.fg))
-                    .flex_shrink_0(),
-            )
             .child(
                 div()
-                    .w(px(32.0))
-                    .h(px(3.0))
-                    .rounded_full()
-                    .bg(rgb(t.border))
+                    .flex()
+                    .items_center()
+                    .justify_center()
+                    .w(px(collapsed_w))
                     .flex_shrink_0()
                     .child(
-                        div()
-                            .w(px(32.0 * fill))
-                            .h_full()
-                            .rounded_full()
-                            .bg(rgb(bar_color)),
+                        svg()
+                            .external_path(self.icon_path().to_string())
+                            .size(px(icon_size))
+                            .text_color(rgb(t.fg))
+                            .flex_shrink_0(),
                     ),
             )
             .child(
-                div()
-                    .text_xs()
-                    .text_color(rgb(t.text_dim))
-                    .flex_shrink_0()
-                    .child(format!("{:>3}%", pct)),
+                div().flex().items_center().gap(px(4.0)).pr(px(8.0))
+                    .child(
+                        div()
+                            .w(px(32.0))
+                            .h(px(3.0))
+                            .rounded_full()
+                            .bg(rgb(t.border))
+                            .flex_shrink_0()
+                            .child(
+                                div()
+                                    .w(px(32.0 * fill))
+                                    .h_full()
+                                    .rounded_full()
+                                    .bg(rgb(bar_color)),
+                            ),
+                    )
+                    .child(
+                        div()
+                            .text_xs()
+                            .text_color(rgb(t.text_dim))
+                            .flex_shrink_0()
+                            .child(format!("{:>3}%", pct)),
+                    ),
             );
 
         // Cubic ease-out: fast start, smooth deceleration

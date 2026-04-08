@@ -77,12 +77,15 @@ impl BarWidget for Fcitx {
             InputMethod::Unknown => ("?", t.yellow),
         };
 
+        let content_h = crate::config::CONTENT_HEIGHT();
+        let button_h = content_h - 4.0;
+
         super::capsule(
             div()
                 .flex()
                 .items_center()
                 .justify_center()
-                .px(px(6.0))
+                .w(px(button_h))
                 .text_color(rgb(color))
                 .font_weight(gpui::FontWeight::BOLD)
                 .text_xs()

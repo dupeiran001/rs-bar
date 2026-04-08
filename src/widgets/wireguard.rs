@@ -142,7 +142,7 @@ impl BarWidget for Wireguard {
                 .flex()
                 .items_center()
                 .justify_center()
-                .px(px(6.0))
+                .px(px(8.0))
                 .child(
                     svg()
                         .external_path(icon.to_string())

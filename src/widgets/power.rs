@@ -19,7 +19,7 @@ impl BarWidget for Power {
         let content_h = crate::config::CONTENT_HEIGHT();
         let command = crate::config::POWER_COMMAND();
         let button_h = content_h - 4.0;
-        let radius = (button_h - 2.0) / 2.0;
+        let radius = button_h / 2.0;
         let shadow_color = rgb(t.bg).into();
 
         div()
@@ -33,8 +33,8 @@ impl BarWidget for Power {
                     .flex()
                     .items_center()
                     .justify_center()
+                    .w(px(button_h))
                     .h(px(button_h))
-                    .px(px(4.0))
                     .rounded(px(radius))
                     .cursor_pointer()
                     .bg(rgb(t.teal))

@@ -242,15 +242,20 @@ impl BarWidget for CapsLock {
     fn render(&mut self, _window: &mut Window, _cx: &mut Context<Self>) -> impl IntoElement {
         let t = crate::config::THEME();
         let content_h = crate::config::CONTENT_HEIGHT();
+        let button_h = content_h - 4.0;
+        let radius = button_h / 2.0;
 
         if self.on {
             div()
                 .flex()
                 .items_center()
                 .justify_center()
-                .h(px(content_h))
+                .h(px(button_h))
                 .px(px(6.0))
-                .bg(rgb(t.border))
+                .rounded(px(radius))
+                .border_1()
+                .border_color(rgb(t.border))
+                .bg(rgb(t.surface))
                 .child(
                     svg()
                         .external_path(

@@ -118,18 +118,25 @@ impl BarWidget for Clock {
         let t = crate::config::THEME();
         let entity = cx.weak_entity();
 
+        let content_h = crate::config::CONTENT_HEIGHT();
+        let button_h = content_h - 4.0;
+        let radius = button_h / 2.0;
+
         div()
             .id("clock")
             .flex()
             .items_center()
             .justify_center()
-            .h(px(crate::config::CONTENT_HEIGHT()))
+            .h(px(button_h))
             .px_2()
-            .rounded_md()
+            .rounded(px(radius))
+            .border_1()
+            .border_color(rgb(t.border))
+            .bg(rgb(t.surface))
             .cursor_pointer()
             .text_xs()
             .text_color(rgb(t.fg))
-            .hover(|s| s.bg(rgb(t.surface)))
+            .hover(|s| s.bg(rgb(t.border)))
             .on_click(move |_event, _window, cx| {
                 let _ = entity.update(cx, |this, cx| {
                     if this.popup_open {

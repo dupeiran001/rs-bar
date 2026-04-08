@@ -1,0 +1,99 @@
+warning: unused import: `MouseButton`
+ --> src/widgets/brightness.rs:6:5
+  |
+6 |     MouseButton, ParentElement, ScrollWheelEvent, StatefulInteractiveElement, Styled, Window, div,
+  |     ^^^^^^^^^^^
+  |
+  = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+
+warning: unused imports: `Anchor`, `Bounds`, `KeyboardInteractivity`, `LayerShellOptions`, `Layer`, `Render`, `Stateful`, `WindowBounds`, `WindowKind`, `WindowOptions`, `point`, and `size`
+ --> src/widgets/volume.rs:6:47
+  |
+6 |     Animation, AnimationExt, AppContext as _, Bounds, Context, InteractiveElement, IntoElement,
+  |                                               ^^^^^^
+7 |     MouseButton, ParentElement, Render, ScrollWheelEvent, Stateful, StatefulInteractiveElement,
+  |                                 ^^^^^^                    ^^^^^^^^
+8 |     Styled, Window, WindowBounds, WindowKind, WindowOptions, div, point, px, rgb, size, svg,
+  |                     ^^^^^^^^^^^^  ^^^^^^^^^^  ^^^^^^^^^^^^^       ^^^^^           ^^^^
+9 |     layer_shell::{Anchor, KeyboardInteractivity, Layer, LayerShellOptions},
+  |                   ^^^^^^  ^^^^^^^^^^^^^^^^^^^^^  ^^^^^  ^^^^^^^^^^^^^^^^^
+
+warning: unused import: `AppContext`
+ --> src/widgets/brightness.rs:5:30
+  |
+5 |     Animation, AnimationExt, AppContext as _, Context, InteractiveElement, IntoElement,
+  |                              ^^^^^^^^^^
+
+warning: unused import: `AppContext`
+ --> src/widgets/volume.rs:6:30
+  |
+6 |     Animation, AnimationExt, AppContext as _, Bounds, Context, InteractiveElement, IntoElement,
+  |                              ^^^^^^^^^^
+
+warning: variable does not need to be mutable
+   --> src/widgets/power_draw.rs:193:9
+    |
+193 |     let mut push = |path: &Path, pkg: &mut Vec<RaplDomain>, psys: &mut Vec<RaplDomain>| {
+    |         ----^^^^
+    |         |
+    |         help: remove this `mut`
+    |
+    = note: `#[warn(unused_mut)]` (part of `#[warn(unused)]`) on by default
+
+warning: fields `index`, `name`, `description`, `volume_pct`, `muted`, and `is_default` are never read
+  --> src/widgets/volume.rs:18:5
+   |
+17 | struct Sink {
+   |        ---- fields in this struct
+18 |     index: u32,
+   |     ^^^^^
+19 |     name: String,
+   |     ^^^^
+20 |     description: String,
+   |     ^^^^^^^^^^^
+21 |     volume_pct: u32,
+   |     ^^^^^^^^^^
+22 |     muted: bool,
+   |     ^^^^^
+23 |     is_default: bool,
+   |     ^^^^^^^^^^
+   |
+   = note: `Sink` has a derived impl for the trait `Clone`, but this is intentionally ignored during dead code analysis
+   = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: fields `index`, `name`, `description`, `volume_pct`, `muted`, and `is_default` are never read
+  --> src/widgets/volume.rs:28:5
+   |
+27 | struct Source {
+   |        ------ fields in this struct
+28 |     index: u32,
+   |     ^^^^^
+29 |     name: String,
+   |     ^^^^
+30 |     description: String,
+   |     ^^^^^^^^^^^
+31 |     volume_pct: u32,
+   |     ^^^^^^^^^^
+32 |     muted: bool,
+   |     ^^^^^
+33 |     is_default: bool,
+   |     ^^^^^^^^^^
+   |
+   = note: `Source` has a derived impl for the trait `Clone`, but this is intentionally ignored during dead code analysis
+
+warning: fields `sinks` and `sources` are never read
+  --> src/widgets/volume.rs:40:5
+   |
+37 | struct AudioState {
+   |        ---------- fields in this struct
+...
+40 |     sinks: Vec<Sink>,
+   |     ^^^^^
+41 |     sources: Vec<Source>,
+   |     ^^^^^^^
+   |
+   = note: `AudioState` has a derived impl for the trait `Clone`, but this is intentionally ignored during dead code analysis
+
+warning: `rs-bar` (bin "rs-bar") generated 8 warnings (run `cargo fix --bin "rs-bar" -p rs-bar` to apply 3 suggestions)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.19s
+     Running `target/debug/rs-bar --config macbook`

@@ -238,8 +238,8 @@ impl BarWidget for Tray {
 
         let n_items = items.len();
 
-        // Match Volume capsule sizing: collapsed = icon + padding
-        let collapsed_w = icon_size + 8.0;
+        // At least as wide as tall for a circular look when collapsed
+        let collapsed_w = button_h;
         let expanded_w =
             collapsed_w + (n_items as f32) * (tray_icon_size + 4.0) + 4.0;
 
