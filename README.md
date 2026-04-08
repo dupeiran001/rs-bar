@@ -75,36 +75,65 @@ Grouped widgets share a single rounded container and skip their individual capsu
 
 ## Prerequisites
 
-### input group (CapsLock widget)
+### Quick setup
+
+Run this to apply all permissions at once (log out and back in afterwards):
+
+```sh
+# Group memberships
+sudo usermod -aG input $USER    # CapsLock widget: evdev access
+sudo usermod -aG video $USER    # Brightness widget: backlight write access
+
+# RAPL powercap tmpfiles rule (CpuDraw/PsysDraw, persists across reboots)
+sudo tee /etc/tmpfiles.d/rapl-powercap.conf <<'EOF'
+z /sys/devices/virtual/powercap/intel-rapl/intel-rapl:*/energy_uj 0444 root root -
+z /sys/devices/virtual/powercap/intel-rapl/intel-rapl:*:*/energy_uj 0444 root root -
+z /sys/devices/virtual/powercap/intel-rapl/intel-rapl:*/max_energy_range_uj 0444 root root -
+z /sys/devices/virtual/powercap/intel-rapl/intel-rapl:*:*/max_energy_range_uj 0444 root root -
+EOF
+sudo systemd-tmpfiles --create /etc/tmpfiles.d/rapl-powercap.conf
+```
+
+### Runtime dependencies
+
+Widgets spawn these external tools. Install whichever you need:
+
+| Widget | Package (Arch) | Command used |
+|--------|---------------|--------------|
+| Volume | `wireplumber`, `libpulse` | `wpctl`, `pactl` |
+| Bluetooth | `bluez-utils` | `bluetoothctl` |
+| Wireguard | `networkmanager` | `nmcli` |
+| Brightness | `brightnessctl` | `brightnessctl` |
+| Fcitx | `fcitx5` | `fcitx5-remote` |
+| PkgUpdate | `pacman-contrib` | `checkupdates` |
+| GpuDraw (nvidia) | `nvidia-utils` | `nvidia-smi` (fallback) |
+
+On Arch:
+
+```sh
+sudo pacman -S wireplumber libpulse bluez-utils networkmanager brightnessctl pacman-contrib
+```
+
+Widgets gracefully degrade (hide or show defaults) when their tools are missing.
+
+### Permission details
+
+#### input group (CapsLock)
 
 The CapsLock widget reads keyboard LED events from `/dev/input/event*` via evdev.
-These device files are owned by `root:input`, so your user must be in the `input` group:
-
-```sh
-sudo usermod -aG input $USER
-```
-
-Log out and back in for the change to take effect.
+These device files are owned by `root:input`, so your user must be in the `input` group.
 Without this, the widget silently disables itself.
 
-### RAPL powercap permissions (CpuDraw/PsysDraw)
+#### video group (Brightness)
 
-The CpuDraw and PsysDraw widgets read Intel RAPL energy counters from `/sys/class/powercap/`.
-These files are root-only on most distros. Install a udev rule to make them readable:
+The Brightness widget uses `brightnessctl` to write `/sys/class/backlight/*/brightness`.
+On most distros this file requires the `video` group for unprivileged write access.
+Not needed on desktops without a backlight device.
 
-```sh
-sudo tee /etc/udev/rules.d/99-rapl-powercap.rules <<'EOF'
-SUBSYSTEM=="powercap", RUN+="/bin/find /sys/devices/virtual/powercap/ -name energy_uj -exec /bin/chmod a+r {} +"
-EOF
-sudo udevadm control --reload-rules && sudo udevadm trigger
-```
+#### RAPL powercap (CpuDraw/PsysDraw)
 
-For immediate effect (persists via the udev rule on next boot):
-
-```sh
-sudo find /sys/devices/virtual/powercap/ -name "energy_uj" -o -name "max_energy_range_uj" | xargs sudo chmod a+r
-```
-
+The CpuDraw and PsysDraw widgets read Intel/AMD RAPL energy counters from `/sys/class/powercap/`.
+These files are root-only on most distros and require the tmpfiles rule above.
 Without this, BatteryDraw and GpuDraw still work but CpuDraw/PsysDraw are omitted.
 
 ## Building
