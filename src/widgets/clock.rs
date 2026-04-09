@@ -10,11 +10,16 @@ use super::{BarWidget, impl_render};
 
 pub struct Clock {
     time: String,
+    date: String,
     popup_open: bool,
 }
 
 fn format_time() -> String {
     Local::now().format("%H:%M").to_string()
+}
+
+fn format_date_short() -> String {
+    Local::now().format("%b %-d").to_string()
 }
 
 fn format_time_full() -> String {
@@ -98,6 +103,7 @@ impl BarWidget for Clock {
                 if this
                     .update(cx, |this, cx| {
                         this.time = format_time();
+                        this.date = format_date_short();
                         cx.notify();
                     })
                     .is_err()
@@ -110,6 +116,7 @@ impl BarWidget for Clock {
 
         Self {
             time: format_time(),
+            date: format_date_short(),
             popup_open: false,
         }
     }
@@ -125,16 +132,17 @@ impl BarWidget for Clock {
         div()
             .id("clock")
             .flex()
+            .flex_col()
             .items_center()
             .justify_center()
             .h(px(button_h))
-            .px_2()
+            .px(px(9.0))
+            .pb(px(2.0))
             .rounded(px(radius))
             .border_1()
             .border_color(rgb(t.border))
             .bg(rgb(t.surface))
             .cursor_pointer()
-            .text_xs()
             .text_color(rgb(t.fg))
             .hover(|s| s.bg(rgb(t.border)))
             .on_click(move |_event, _window, cx| {
@@ -168,7 +176,20 @@ impl BarWidget for Clock {
                     .detach();
                 });
             })
-            .child(self.time.clone())
+            .child(
+                div()
+                    .text_xs()
+                    .text_color(rgb(t.accent))
+                    .line_height(px(12.0))
+                    .child(self.time.clone()),
+            )
+            .child(
+                div()
+                    .text_color(rgb(t.accent_dim))
+                    .text_size(px(9.0))
+                    .line_height(px(10.0))
+                    .child(self.date.clone()),
+            )
     }
 }
 

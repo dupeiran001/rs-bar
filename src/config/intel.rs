@@ -5,9 +5,9 @@ use crate::theme;
 use crate::widgets::GpuBusy;
 use crate::widgets::GpuDraw;
 use crate::widgets::{
-    Bluetooth, Brightness, CapsLock, Clock, CpuDraw, CpuFreq, CpuTemp, CpuUsage, Date, Fcitx,
-    Memory, Minimap, PkgUpdate, Power, PsysDraw, Tray, Volume, Widget, Wifi, WindowTitle,
-    Wireguard, Workspaces, group,
+    Bluetooth, Brightness, CapsLock, Clock, CpuDraw, CpuFreq, CpuTemp, CpuUsage, Fcitx, Memory,
+    Minimap, PkgUpdate, Power, PsysDraw, Tray, Volume, Widget, Wifi, WindowTitle, Wireguard,
+    Workspaces, group,
 };
 
 use super::{Config, widgets};
@@ -34,20 +34,14 @@ pub(super) fn config() -> Config {
 pub(super) fn bar(cx: &mut App) -> Bar {
     Bar {
         left: widgets!(cx, Workspaces, Minimap, WindowTitle),
-        center_left: widgets!(
-            cx,
-            group!(cx, CpuFreq, | , GpuBusy),
-            group!(cx, CpuUsage, |, CpuTemp),
-            Memory
-        ),
+        center_left: widgets!(cx, CpuFreq, group!(cx, CpuUsage, |, CpuTemp), Memory),
         center: widgets!(cx, Clock),
         center_right: widgets!(
             cx,
-            Date,
             Wifi,
             Bluetooth,
             PkgUpdate,
-            group!(cx, GpuDraw, |, CpuDraw)
+            group!(cx, GpuDraw, |, CpuDraw, |, GpuBusy)
         ),
         right: widgets!(
             cx, Wireguard, Volume, Brightness, Tray, Fcitx, CapsLock, Power

@@ -18,7 +18,7 @@ pub const NORD: Theme = Theme {
     blue:             0x5E81AC, // frost 4
     teal:             0x8FBCBB, // frost 1
     purple:           0xB48EAD, // aurora purple
-    border:           0x4C566A, // polar night 4
+    border:           0x3B4252, // same as surface — capsules render borderless
     border_highlight: 0x434C5E, // polar night 3
     error:            0xBF616A, // aurora red
     warn:             0xEBCB8B, // aurora yellow

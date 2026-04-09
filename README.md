@@ -26,14 +26,13 @@ A Wayland status bar built with Rust + [GPUI](https://github.com/zed-industries/
 
 | Widget | Description |
 |--------|-------------|
-| **Clock** | Time display (HH:MM). Capsule-styled. Updates every second. |
+| **Clock** | Two-line time + date display (HH:MM on top, Mon DD on bottom). Capsule-styled. Updates every second. Click for popup with full time and date. |
 | **Notch** | Decorative notch element for MacBook-style layouts. |
 
 ### Center-Right Section
 
 | Widget | Description |
 |--------|-------------|
-| **Date** | Date display (MM-DD) with calendar icon. Capsule-styled. Updates every minute. |
 | **Wifi** | Wi-Fi status indicator. Reads state from sysfs/procfs/NL80211 (zero subprocesses). Monitors link changes via netlink RTMGRP_LINK socket, polls signal via timerfd (5s). Icon and color reflect signal strength: excellent/good/fair/weak/off. |
 | **Bluetooth** | Bluetooth state indicator. Reads initial power state from rfkill sysfs, then monitors via a long-lived `bluetoothctl` process with epoll on stdout. Three states: off (dim), on (normal), connected (blue). |
 | **PkgUpdate** | Package update indicator. Auto-detects distro package manager (Arch pacman/yay/paru, Debian apt, Fedora dnf) + Flatpak. Polls every 10 minutes. Green icon when updates available, dim when up-to-date. |

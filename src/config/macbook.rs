@@ -4,7 +4,7 @@ use crate::Bar;
 use crate::theme;
 use crate::widgets::{
     Battery, BatteryDraw, Bluetooth, Brightness, CapsLock, Clock, CpuDraw, CpuFreq, CpuTemp,
-    CpuUsage, Date, Fcitx, GpuBusy, GpuDraw, Memory, Minimap, Notch, PkgUpdate, Power, PsysDraw,
+    CpuUsage, Fcitx, GpuBusy, GpuDraw, Memory, Minimap, Notch, PkgUpdate, Power, PsysDraw,
     Tray, Volume, Widget, Wifi, WindowTitle, Wireguard, Workspaces, group,
 };
 
@@ -42,7 +42,6 @@ pub(super) fn bar(cx: &mut App) -> Bar {
         center_right: widgets!(
             cx,
             Clock,
-            Date,
             Wifi,
             Bluetooth,
             PkgUpdate,

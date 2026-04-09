@@ -146,13 +146,21 @@ impl Render for WidgetGroup {
             .gap(px(4.0))
             .text_xs();
 
+        let sep_h = (button_h - 10.0).max(6.0);
+
         for entry in &self.entries {
             match entry {
                 GroupEntry::Widget(view) => {
                     row = row.child(view.clone());
                 }
                 GroupEntry::Separator => {
-                    row = row.child(div().text_color(rgb(t.border)).child("│"));
+                    row = row.child(
+                        div()
+                            .flex_shrink_0()
+                            .w(px(1.0))
+                            .h(px(sep_h))
+                            .bg(rgb(t.fg_gutter)),
+                    );
                 }
             }
         }
