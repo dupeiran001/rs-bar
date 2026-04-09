@@ -10,9 +10,12 @@
 
 use std::os::fd::{AsRawFd, FromRawFd, OwnedFd};
 use std::path::{Path, PathBuf};
+use std::sync::OnceLock;
 use std::time::Instant;
 
 use gpui::{Context, IntoElement, ParentElement, Styled, Window, div, px, rgb, svg};
+
+use crate::hub::Broadcast;
 
 use super::{BarWidget, impl_render};
 
@@ -440,31 +443,58 @@ pub struct BatteryDraw {
     grouped: bool,
 }
 
+fn battery_draw_broadcast() -> Option<&'static Broadcast<BatteryReading>> {
+    static BC: OnceLock<Option<Broadcast<BatteryReading>>> = OnceLock::new();
+    BC.get_or_init(|| {
+        let bat = detect_battery()?;
+        log::info!("battery-draw: {}", bat.dir.display());
+        let bc = Broadcast::<BatteryReading>::new();
+        let producer = bc.clone();
+        std::thread::Builder::new()
+            .name("battery-draw".into())
+            .spawn(move || {
+                timerfd_loop(2, true, || {
+                    let (watts, charging) = read_battery(&bat);
+                    producer.publish(BatteryReading { watts, charging });
+                    true
+                });
+            })
+            .ok();
+        Some(bc)
+    })
+    .as_ref()
+}
+
+/// Quantise a float watts value to the precision of its display
+/// (one decimal place: `X.X`). Used by all *_draw widgets to skip
+/// redundant paints when the displayed string would be identical.
+fn quantise_watts(w: f64) -> i32 {
+    (w * 10.0).round() as i32
+}
+
 impl BarWidget for BatteryDraw {
     const NAME: &str = "battery-draw";
 
     fn new(cx: &mut Context<Self>) -> Self {
-        let bat = detect_battery();
-        if let Some(bat) = bat {
-            log::info!("battery-draw: {}", bat.dir.display());
-            let (tx, rx) = async_channel::bounded::<BatteryReading>(1);
-
-            std::thread::Builder::new()
-                .name("battery-draw".into())
-                .spawn(move || {
-                    timerfd_loop(2, true, || {
-                        let (watts, charging) = read_battery(&bat);
-                        !tx.try_send(BatteryReading { watts, charging }).is_err() || !tx.is_closed()
-                    });
-                })
-                .ok();
-
+        if let Some(bc) = battery_draw_broadcast() {
+            let sub = bc.subscribe();
             cx.spawn(async move |this, cx| {
-                while let Ok(r) = rx.recv().await {
+                while let Some(r) = sub.next().await {
                     if this
                         .update(cx, |this, cx| {
-                            this.reading = Some(r);
-                            cx.notify();
+                            // Only notify when the rendered `X.XW` or
+                            // the charging state would change.
+                            let changed = match &this.reading {
+                                Some(prev) => {
+                                    quantise_watts(prev.watts) != quantise_watts(r.watts)
+                                        || prev.charging != r.charging
+                                }
+                                None => true,
+                            };
+                            if changed {
+                                this.reading = Some(r);
+                                cx.notify();
+                            }
                         })
                         .is_err()
                     {
@@ -473,8 +503,6 @@ impl BarWidget for BatteryDraw {
                 }
             })
             .detach();
-        } else {
-            log::info!("battery-draw: no battery found");
         }
 
         Self {
@@ -534,67 +562,77 @@ pub struct CpuDraw {
     grouped: bool,
 }
 
-impl BarWidget for CpuDraw {
-    const NAME: &str = "cpu-draw";
-
-    fn new(cx: &mut Context<Self>) -> Self {
+fn cpu_draw_broadcast() -> Option<&'static Broadcast<CpuPowerReading>> {
+    static BC: OnceLock<Option<Broadcast<CpuPowerReading>>> = OnceLock::new();
+    BC.get_or_init(|| {
         let vendor = detect_cpu_vendor();
         let (pkg, _) = detect_rapl();
-
         let source = if !pkg.is_empty() {
             Some(CpuPowerSource::Rapl(pkg))
         } else {
             detect_macsmc_sensor("Heatpipe Power").map(CpuPowerSource::Macsmc)
-        };
-
-        if let Some(source) = source {
-            log::info!("cpu-draw: source detected (vendor={:?})", vendor as u8);
-            let (tx, rx) = async_channel::bounded::<CpuPowerReading>(1);
-
-            std::thread::Builder::new()
-                .name("cpu-draw".into())
-                .spawn(move || {
-                    match source {
-                        CpuPowerSource::Macsmc(path) => {
-                            timerfd_loop(2, true, || {
-                                let watts =
-                                    sysfs_u64(&path).map(|uw| uw as f64 / 1e6).unwrap_or(0.0);
-                                !tx.try_send(CpuPowerReading { watts, vendor }).is_err()
-                                    || !tx.is_closed()
-                            });
+        }?;
+        log::info!("cpu-draw: source detected (vendor={:?})", vendor as u8);
+        let bc = Broadcast::<CpuPowerReading>::new();
+        let producer = bc.clone();
+        std::thread::Builder::new()
+            .name("cpu-draw".into())
+            .spawn(move || match source {
+                CpuPowerSource::Macsmc(path) => {
+                    timerfd_loop(2, true, || {
+                        let watts =
+                            sysfs_u64(&path).map(|uw| uw as f64 / 1e6).unwrap_or(0.0);
+                        producer.publish(CpuPowerReading { watts, vendor });
+                        true
+                    });
+                }
+                CpuPowerSource::Rapl(domains) => {
+                    let mut prev_time = Instant::now();
+                    let mut prev_energies: Vec<u64> = domains
+                        .iter()
+                        .map(|d| sysfs_u64(&d.energy_path).unwrap_or(0))
+                        .collect();
+                    timerfd_loop(2, false, || {
+                        let now = Instant::now();
+                        let dt = now.duration_since(prev_time).as_secs_f64();
+                        let mut watts = 0.0;
+                        for (i, d) in domains.iter().enumerate() {
+                            let cur = sysfs_u64(&d.energy_path).unwrap_or(0);
+                            watts += delta_watts(cur, prev_energies[i], d.max_uj, dt);
+                            prev_energies[i] = cur;
                         }
-                        CpuPowerSource::Rapl(domains) => {
-                            // Delta-based: need previous snapshot
-                            let mut prev_time = Instant::now();
-                            let mut prev_energies: Vec<u64> = domains
-                                .iter()
-                                .map(|d| sysfs_u64(&d.energy_path).unwrap_or(0))
-                                .collect();
+                        prev_time = now;
+                        producer.publish(CpuPowerReading { watts, vendor });
+                        true
+                    });
+                }
+            })
+            .ok();
+        Some(bc)
+    })
+    .as_ref()
+}
 
-                            timerfd_loop(2, false, || {
-                                let now = Instant::now();
-                                let dt = now.duration_since(prev_time).as_secs_f64();
-                                let mut watts = 0.0;
-                                for (i, d) in domains.iter().enumerate() {
-                                    let cur = sysfs_u64(&d.energy_path).unwrap_or(0);
-                                    watts += delta_watts(cur, prev_energies[i], d.max_uj, dt);
-                                    prev_energies[i] = cur;
-                                }
-                                prev_time = now;
-                                !tx.try_send(CpuPowerReading { watts, vendor }).is_err()
-                                    || !tx.is_closed()
-                            });
-                        }
-                    }
-                })
-                .ok();
+impl BarWidget for CpuDraw {
+    const NAME: &str = "cpu-draw";
 
+    fn new(cx: &mut Context<Self>) -> Self {
+        if let Some(bc) = cpu_draw_broadcast() {
+            let sub = bc.subscribe();
             cx.spawn(async move |this, cx| {
-                while let Ok(r) = rx.recv().await {
+                while let Some(r) = sub.next().await {
                     if this
                         .update(cx, |this, cx| {
-                            this.reading = Some(r);
-                            cx.notify();
+                            let changed = match &this.reading {
+                                Some(prev) => {
+                                    quantise_watts(prev.watts) != quantise_watts(r.watts)
+                                }
+                                None => true,
+                            };
+                            if changed {
+                                this.reading = Some(r);
+                                cx.notify();
+                            }
                         })
                         .is_err()
                     {
@@ -603,8 +641,6 @@ impl BarWidget for CpuDraw {
                 }
             })
             .detach();
-        } else {
-            log::info!("cpu-draw: no source found");
         }
 
         Self {
@@ -668,60 +704,75 @@ pub struct PsysDraw {
     grouped: bool,
 }
 
-impl BarWidget for PsysDraw {
-    const NAME: &str = "psys-draw";
-
-    fn new(cx: &mut Context<Self>) -> Self {
+fn psys_draw_broadcast() -> Option<&'static Broadcast<PsysReading>> {
+    static BC: OnceLock<Option<Broadcast<PsysReading>>> = OnceLock::new();
+    BC.get_or_init(|| {
         let (_, psys) = detect_rapl();
-
         let source = if !psys.is_empty() {
             Some(PsysPowerSource::Rapl(psys))
         } else {
             detect_macsmc_sensor("Total System Power").map(PsysPowerSource::Macsmc)
-        };
+        }?;
+        log::info!("psys-draw: source detected");
+        let bc = Broadcast::<PsysReading>::new();
+        let producer = bc.clone();
+        std::thread::Builder::new()
+            .name("psys-draw".into())
+            .spawn(move || match source {
+                PsysPowerSource::Macsmc(path) => {
+                    timerfd_loop(2, true, || {
+                        let watts = sysfs_u64(&path).map(|uw| uw as f64 / 1e6).unwrap_or(0.0);
+                        producer.publish(PsysReading { watts });
+                        true
+                    });
+                }
+                PsysPowerSource::Rapl(domains) => {
+                    let mut prev_time = Instant::now();
+                    let mut prev_energies: Vec<u64> = domains
+                        .iter()
+                        .map(|d| sysfs_u64(&d.energy_path).unwrap_or(0))
+                        .collect();
+                    timerfd_loop(2, false, || {
+                        let now = Instant::now();
+                        let dt = now.duration_since(prev_time).as_secs_f64();
+                        let mut watts = 0.0;
+                        for (i, d) in domains.iter().enumerate() {
+                            let cur = sysfs_u64(&d.energy_path).unwrap_or(0);
+                            watts += delta_watts(cur, prev_energies[i], d.max_uj, dt);
+                            prev_energies[i] = cur;
+                        }
+                        prev_time = now;
+                        producer.publish(PsysReading { watts });
+                        true
+                    });
+                }
+            })
+            .ok();
+        Some(bc)
+    })
+    .as_ref()
+}
 
-        if let Some(source) = source {
-            log::info!("psys-draw: source detected");
-            let (tx, rx) = async_channel::bounded::<PsysReading>(1);
+impl BarWidget for PsysDraw {
+    const NAME: &str = "psys-draw";
 
-            std::thread::Builder::new()
-                .name("psys-draw".into())
-                .spawn(move || match source {
-                    PsysPowerSource::Macsmc(path) => {
-                        timerfd_loop(2, true, || {
-                            let watts = sysfs_u64(&path).map(|uw| uw as f64 / 1e6).unwrap_or(0.0);
-                            !tx.try_send(PsysReading { watts }).is_err() || !tx.is_closed()
-                        });
-                    }
-                    PsysPowerSource::Rapl(domains) => {
-                        let mut prev_time = Instant::now();
-                        let mut prev_energies: Vec<u64> = domains
-                            .iter()
-                            .map(|d| sysfs_u64(&d.energy_path).unwrap_or(0))
-                            .collect();
-
-                        timerfd_loop(2, false, || {
-                            let now = Instant::now();
-                            let dt = now.duration_since(prev_time).as_secs_f64();
-                            let mut watts = 0.0;
-                            for (i, d) in domains.iter().enumerate() {
-                                let cur = sysfs_u64(&d.energy_path).unwrap_or(0);
-                                watts += delta_watts(cur, prev_energies[i], d.max_uj, dt);
-                                prev_energies[i] = cur;
-                            }
-                            prev_time = now;
-                            !tx.try_send(PsysReading { watts }).is_err() || !tx.is_closed()
-                        });
-                    }
-                })
-                .ok();
-
+    fn new(cx: &mut Context<Self>) -> Self {
+        if let Some(bc) = psys_draw_broadcast() {
+            let sub = bc.subscribe();
             cx.spawn(async move |this, cx| {
-                while let Ok(r) = rx.recv().await {
+                while let Some(r) = sub.next().await {
                     if this
                         .update(cx, |this, cx| {
-                            this.reading = Some(r);
-                            cx.notify();
+                            let changed = match &this.reading {
+                                Some(prev) => {
+                                    quantise_watts(prev.watts) != quantise_watts(r.watts)
+                                }
+                                None => true,
+                            };
+                            if changed {
+                                this.reading = Some(r);
+                                cx.notify();
+                            }
                         })
                         .is_err()
                     {
@@ -730,8 +781,6 @@ impl BarWidget for PsysDraw {
                 }
             })
             .detach();
-        } else {
-            log::info!("psys-draw: no source found");
         }
 
         Self {
@@ -783,74 +832,85 @@ pub struct GpuDraw {
     grouped: bool,
 }
 
+fn gpu_draw_broadcast() -> Option<&'static Broadcast<GpuPowerReading>> {
+    static BC: OnceLock<Option<Broadcast<GpuPowerReading>>> = OnceLock::new();
+    BC.get_or_init(|| {
+        let gpu = detect_gpu()?;
+        log::info!("gpu-draw: {} detected", gpu.label);
+        let icon = gpu_vendor_icon(&gpu.label);
+        let label = gpu.label.clone();
+        let bc = Broadcast::<GpuPowerReading>::new();
+        let producer = bc.clone();
+        std::thread::Builder::new()
+            .name("gpu-draw".into())
+            .spawn(move || {
+                let mut prev_time = Instant::now();
+                let mut prev_energy: Option<u64> =
+                    gpu.energy_file.as_ref().and_then(|p| sysfs_u64(p));
+                timerfd_loop(2, true, || {
+                    let watts = if let Some(ref p) = gpu.power_file {
+                        sysfs_u64(p).map(|uw| uw as f64 / 1e6).unwrap_or(0.0)
+                    } else if let Some(ref p) = gpu.energy_file {
+                        let now = Instant::now();
+                        let dt = now.duration_since(prev_time).as_secs_f64();
+                        let cur = sysfs_u64(p).unwrap_or(0);
+                        let w = if let Some(prev) = prev_energy {
+                            delta_watts(cur, prev, u64::MAX, dt)
+                        } else {
+                            0.0
+                        };
+                        prev_time = now;
+                        prev_energy = Some(cur);
+                        w
+                    } else {
+                        std::process::Command::new("nvidia-smi")
+                            .args([
+                                "--query-gpu=power.draw",
+                                "--format=csv,noheader,nounits",
+                                "-i",
+                                "0",
+                            ])
+                            .output()
+                            .ok()
+                            .and_then(|o| {
+                                String::from_utf8_lossy(&o.stdout).trim().parse().ok()
+                            })
+                            .unwrap_or(0.0)
+                    };
+                    producer.publish(GpuPowerReading {
+                        watts,
+                        label: label.clone(),
+                        icon,
+                    });
+                    true
+                });
+            })
+            .ok();
+        Some(bc)
+    })
+    .as_ref()
+}
+
 impl BarWidget for GpuDraw {
     const NAME: &str = "gpu-draw";
 
     fn new(cx: &mut Context<Self>) -> Self {
-        let gpu = detect_gpu();
-
-        if let Some(gpu) = gpu {
-            log::info!("gpu-draw: {} detected", gpu.label);
-            let icon = gpu_vendor_icon(&gpu.label);
-            let label = gpu.label.clone();
-            let (tx, rx) = async_channel::bounded::<GpuPowerReading>(1);
-
-            std::thread::Builder::new()
-                .name("gpu-draw".into())
-                .spawn(move || {
-                    // For energy-based: delta tracking
-                    let mut prev_time = Instant::now();
-                    let mut prev_energy: Option<u64> =
-                        gpu.energy_file.as_ref().and_then(|p| sysfs_u64(p));
-
-                    timerfd_loop(2, true, || {
-                        let watts = if let Some(ref p) = gpu.power_file {
-                            sysfs_u64(p).map(|uw| uw as f64 / 1e6).unwrap_or(0.0)
-                        } else if let Some(ref p) = gpu.energy_file {
-                            let now = Instant::now();
-                            let dt = now.duration_since(prev_time).as_secs_f64();
-                            let cur = sysfs_u64(p).unwrap_or(0);
-                            let w = if let Some(prev) = prev_energy {
-                                delta_watts(cur, prev, u64::MAX, dt)
-                            } else {
-                                0.0
-                            };
-                            prev_time = now;
-                            prev_energy = Some(cur);
-                            w
-                        } else {
-                            // nvidia-smi fallback
-                            std::process::Command::new("nvidia-smi")
-                                .args([
-                                    "--query-gpu=power.draw",
-                                    "--format=csv,noheader,nounits",
-                                    "-i",
-                                    "0",
-                                ])
-                                .output()
-                                .ok()
-                                .and_then(|o| {
-                                    String::from_utf8_lossy(&o.stdout).trim().parse().ok()
-                                })
-                                .unwrap_or(0.0)
-                        };
-
-                        let r = GpuPowerReading {
-                            watts,
-                            label: label.clone(),
-                            icon,
-                        };
-                        !tx.try_send(r).is_err() || !tx.is_closed()
-                    });
-                })
-                .ok();
-
+        if let Some(bc) = gpu_draw_broadcast() {
+            let sub = bc.subscribe();
             cx.spawn(async move |this, cx| {
-                while let Ok(r) = rx.recv().await {
+                while let Some(r) = sub.next().await {
                     if this
                         .update(cx, |this, cx| {
-                            this.reading = Some(r);
-                            cx.notify();
+                            let changed = match &this.reading {
+                                Some(prev) => {
+                                    quantise_watts(prev.watts) != quantise_watts(r.watts)
+                                }
+                                None => true,
+                            };
+                            if changed {
+                                this.reading = Some(r);
+                                cx.notify();
+                            }
                         })
                         .is_err()
                     {
@@ -859,8 +919,6 @@ impl BarWidget for GpuDraw {
                 }
             })
             .detach();
-        } else {
-            log::info!("gpu-draw: no dGPU found");
         }
 
         Self {

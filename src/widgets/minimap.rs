@@ -1,22 +1,9 @@
-use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::{Arc, Mutex};
-use std::time::Duration;
-
 use gpui::{
     Context, IntoElement, ParentElement, Styled, Window, div, px, rgb,
 };
 use uuid::Uuid;
-use niri_ipc::socket::Socket;
-use niri_ipc::state::EventStreamStatePart;
-use niri_ipc::{Request, Response};
 
 use super::{BarWidget, impl_render};
-
-struct SharedState {
-    windows: Vec<niri_ipc::Window>,
-    workspaces: Vec<niri_ipc::Workspace>,
-    outputs: Vec<niri_ipc::Output>,
-}
 
 pub struct Minimap {
     windows: Vec<niri_ipc::Window>,
@@ -46,97 +33,19 @@ impl BarWidget for Minimap {
     const NAME: &str = "minimap";
 
     fn new(cx: &mut Context<Self>) -> Self {
-        let shared = Arc::new(Mutex::new(SharedState {
-            windows: Vec::new(),
-            workspaces: Vec::new(),
-            outputs: Vec::new(),
-        }));
-        let dirty = Arc::new(AtomicBool::new(false));
-
-        let ev_shared = shared.clone();
-        let ev_dirty = dirty.clone();
-        std::thread::spawn(move || {
-            // Fetch outputs
-            if let Ok(mut socket) = Socket::connect() {
-                if let Ok(Ok(Response::Outputs(outputs))) = socket.send(Request::Outputs) {
-                    ev_shared.lock().unwrap().outputs = outputs.into_values().collect();
-                    ev_dirty.store(true, Ordering::Release);
-                }
-            }
-
-            // Event stream
-            let Ok(mut socket) = Socket::connect() else {
-                log::error!("minimap: failed to connect to niri socket");
-                return;
-            };
-            let Ok(Ok(Response::Handled)) = socket.send(Request::EventStream) else {
-                log::error!("minimap: failed to start event stream");
-                return;
-            };
-
-            let mut read_event = socket.read_events();
-            let mut ws_state = niri_ipc::state::WorkspacesState::default();
-            let mut win_state = niri_ipc::state::WindowsState::default();
-
-            loop {
-                match read_event() {
-                    Ok(event) => {
-                        let event = match ws_state.apply(event) {
-                            None => {
-                                let mut ws: Vec<_> =
-                                    ws_state.workspaces.values().cloned().collect();
-                                ws.sort_by(|a, b| {
-                                    a.output.cmp(&b.output).then(a.idx.cmp(&b.idx))
-                                });
-                                ev_shared.lock().unwrap().workspaces = ws;
-                                ev_dirty.store(true, Ordering::Release);
-                                continue;
-                            }
-                            Some(event) => event,
-                        };
-
-                        if win_state.apply(event).is_none() {
-                            let wins: Vec<_> =
-                                win_state.windows.values().cloned().collect();
-                            ev_shared.lock().unwrap().windows = wins;
-                            ev_dirty.store(true, Ordering::Release);
-                        }
-                    }
-                    Err(e) => {
-                        log::error!("minimap: event stream error: {e}");
-                        break;
-                    }
-                }
-            }
-        });
-
-        let poll_shared = shared.clone();
-        let poll_dirty = dirty.clone();
+        let sub = crate::niri::broadcast().subscribe();
         cx.spawn(async move |this, cx| {
-            loop {
-                cx.background_executor()
-                    .timer(Duration::from_millis(50))
-                    .await;
-
-                if poll_dirty.load(Ordering::Acquire) {
-                    poll_dirty.store(false, Ordering::Release);
-                    let state = poll_shared.lock().unwrap();
-                    let windows = state.windows.clone();
-                    let workspaces = state.workspaces.clone();
-                    let outputs = state.outputs.clone();
-                    drop(state);
-
-                    if this
-                        .update(cx, |this, cx| {
-                            this.windows = windows;
-                            this.workspaces = workspaces;
-                            this.outputs = outputs;
-                            cx.notify();
-                        })
-                        .is_err()
-                    {
-                        break;
-                    }
+            while let Some(snap) = sub.next().await {
+                if this
+                    .update(cx, |this, cx| {
+                        this.windows = snap.windows;
+                        this.workspaces = snap.workspaces;
+                        this.outputs = snap.outputs;
+                        cx.notify();
+                    })
+                    .is_err()
+                {
+                    break;
                 }
             }
         })

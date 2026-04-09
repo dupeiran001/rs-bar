@@ -96,15 +96,24 @@ impl BarWidget for Clock {
     const NAME: &str = "clock";
 
     fn new(cx: &mut Context<Self>) -> Self {
+        // Wake once per second to check for a minute-rollover, but only
+        // notify GPUI (triggering a repaint) when the visible "HH:MM" /
+        // "Mon DD" strings actually change. With a minute-granularity clock
+        // that's one notify per minute instead of 60 — eliminates 59 of 60
+        // main-thread repaint wakeups per minute.
         cx.spawn(async |this, cx| {
             loop {
                 cx.background_executor().timer(Duration::from_secs(1)).await;
 
                 if this
                     .update(cx, |this, cx| {
-                        this.time = format_time();
-                        this.date = format_date_short();
-                        cx.notify();
+                        let new_time = format_time();
+                        let new_date = format_date_short();
+                        if new_time != this.time || new_date != this.date {
+                            this.time = new_time;
+                            this.date = new_date;
+                            cx.notify();
+                        }
                     })
                     .is_err()
                 {

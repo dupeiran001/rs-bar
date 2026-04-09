@@ -2,10 +2,15 @@
 //!
 //! Reads `/proc/meminfo` every 2 seconds via `timerfd` + `epoll`.
 //! Displays used percentage: `(MemTotal - MemAvailable) / MemTotal * 100`.
+//!
+//! Monitor thread is a singleton (see [`crate::hub::Broadcast`]).
 
 use std::os::fd::{AsRawFd, FromRawFd, OwnedFd};
+use std::sync::OnceLock;
 
 use gpui::{Context, IntoElement, ParentElement, Styled, Window, div, px, rgb, svg};
+
+use crate::hub::Broadcast;
 
 use super::{BarWidget, impl_render};
 
@@ -31,7 +36,20 @@ fn read_mem_usage() -> f32 {
     ((total - available) as f32 / total as f32) * 100.0
 }
 
-fn mem_monitor(tx: async_channel::Sender<f32>) {
+fn broadcast() -> &'static Broadcast<f32> {
+    static BC: OnceLock<Broadcast<f32>> = OnceLock::new();
+    BC.get_or_init(|| {
+        let bc = Broadcast::<f32>::new();
+        let producer = bc.clone();
+        std::thread::Builder::new()
+            .name("memory".into())
+            .spawn(move || mem_monitor(producer))
+            .ok();
+        bc
+    })
+}
+
+fn mem_monitor(bc: Broadcast<f32>) {
     let tfd = unsafe { libc::timerfd_create(libc::CLOCK_MONOTONIC, libc::TFD_CLOEXEC) };
     if tfd < 0 { return; }
     let tfd = unsafe { OwnedFd::from_raw_fd(tfd) };
@@ -59,8 +77,7 @@ fn mem_monitor(tx: async_channel::Sender<f32>) {
         let mut buf = [0u8; 8];
         unsafe { libc::read(tfd.as_raw_fd(), buf.as_mut_ptr().cast(), 8) };
 
-        let usage = read_mem_usage();
-        if tx.try_send(usage).is_err() && tx.is_closed() { break; }
+        bc.publish(read_mem_usage());
     }
 }
 
@@ -73,16 +90,22 @@ impl BarWidget for Memory {
     const NAME: &str = "memory";
 
     fn new(cx: &mut Context<Self>) -> Self {
-        let (tx, rx) = async_channel::bounded::<f32>(1);
-
-        std::thread::Builder::new()
-            .name("memory".into())
-            .spawn(move || mem_monitor(tx))
-            .ok();
-
+        let sub = broadcast().subscribe();
         cx.spawn(async move |this, cx| {
-            while let Ok(usage) = rx.recv().await {
-                if this.update(cx, |this, cx| { this.usage = usage; cx.notify(); }).is_err() {
+            while let Some(usage) = sub.next().await {
+                if this
+                    .update(cx, |this, cx| {
+                        // Skip the repaint when the displayed integer %
+                        // hasn't changed (color thresholds are integer too).
+                        let new_pct = usage.round() as u32;
+                        let old_pct = this.usage.round() as u32;
+                        if new_pct != old_pct {
+                            this.usage = usage;
+                            cx.notify();
+                        }
+                    })
+                    .is_err()
+                {
                     break;
                 }
             }

@@ -1,3 +1,4 @@
+use std::path::PathBuf;
 use std::sync::{Arc, Mutex, OnceLock};
 use std::time::Duration;
 
@@ -14,60 +15,101 @@ struct BrightnessState {
     percent: u32,
 }
 
+/// A sysfs backlight device discovered at startup. Stored with both the
+/// current and max file paths so each poll is two tiny file reads — no
+/// subprocess fork, no shell, no parsing gymnastics.
+struct Backlight {
+    current: PathBuf,
+    max: u32,
+}
+
 struct BrightnessServer {
     state: Arc<Mutex<BrightnessState>>,
     subscribers: Arc<Mutex<Vec<async_channel::Sender<()>>>>,
+    // `None` when no backlight was detected (common on desktops); callers
+    // then treat the widget as a no-op rather than fork `brightnessctl`
+    // every 2s for nothing.
+    backlight: Option<Arc<Backlight>>,
 }
 
-fn query_brightness() -> BrightnessState {
-    let cmd = &crate::config::BRIGHTNESS_GET_CMD();
-    let output = std::process::Command::new("sh").args(["-c", cmd]).output();
-    let percent = match output {
-        Ok(o) => {
-            let s = String::from_utf8_lossy(&o.stdout).trim().to_string();
-            // Parse percentage from various formats: "50%", "50", "Current brightness: 50 (50%)"
-            s.split(|c: char| !c.is_ascii_digit())
-                .filter(|s| !s.is_empty())
-                .last()
-                .and_then(|v| v.parse::<u32>().ok())
-                .unwrap_or(0)
+/// Look for a backlight device in `/sys/class/backlight/`. Returns the first
+/// entry that exposes a readable `brightness` + `max_brightness` pair.
+fn detect_backlight() -> Option<Backlight> {
+    let entries = std::fs::read_dir("/sys/class/backlight").ok()?;
+    for entry in entries.filter_map(Result::ok) {
+        let dir = entry.path();
+        let current = dir.join("brightness");
+        let max = dir.join("max_brightness");
+        if let (Ok(_), Ok(max_s)) = (
+            std::fs::read_to_string(&current),
+            std::fs::read_to_string(&max),
+        ) {
+            if let Ok(max_val) = max_s.trim().parse::<u32>() {
+                if max_val > 0 {
+                    return Some(Backlight { current, max: max_val });
+                }
+            }
         }
-        Err(_) => 0,
-    };
+    }
+    None
+}
+
+fn read_sysfs_brightness(bl: &Backlight) -> BrightnessState {
+    let percent = std::fs::read_to_string(&bl.current)
+        .ok()
+        .and_then(|s| s.trim().parse::<u32>().ok())
+        .map(|cur| (cur.saturating_mul(100) / bl.max).min(100))
+        .unwrap_or(0);
     BrightnessState { percent }
 }
 
 fn brightness_server() -> &'static BrightnessServer {
     static SERVER: OnceLock<BrightnessServer> = OnceLock::new();
     SERVER.get_or_init(|| {
-        let state = Arc::new(Mutex::new(query_brightness()));
+        let backlight = detect_backlight().map(Arc::new);
+        let initial = match &backlight {
+            Some(bl) => {
+                log::info!("brightness: sysfs {} (max={})", bl.current.display(), bl.max);
+                read_sysfs_brightness(bl)
+            }
+            None => {
+                log::info!("brightness: no backlight detected, widget disabled");
+                BrightnessState { percent: 0 }
+            }
+        };
+        let state = Arc::new(Mutex::new(initial));
         let subscribers: Arc<Mutex<Vec<async_channel::Sender<()>>>> =
             Arc::new(Mutex::new(Vec::new()));
 
-        let ev_state = state.clone();
-        let ev_subs = subscribers.clone();
-
-        // Poll-based since there's no universal brightness event stream.
-        // Only polls every 2s to stay lightweight; scroll actions trigger immediate re-query.
-        std::thread::Builder::new()
-            .name("brightness-monitor".into())
-            .spawn(move || loop {
-                std::thread::sleep(Duration::from_secs(2));
-                let new = query_brightness();
-                let mut current = ev_state.lock().unwrap();
-                if current.percent != new.percent {
-                    *current = new;
-                    drop(current);
-                    let mut subs = ev_subs.lock().unwrap();
-                    subs.retain(|tx| !tx.is_closed());
-                    for tx in subs.iter() {
-                        let _ = tx.try_send(());
+        // Only spawn the poll thread when there's actually something to read.
+        if let Some(bl) = &backlight {
+            let poll_state = state.clone();
+            let poll_subs = subscribers.clone();
+            let poll_bl = bl.clone();
+            std::thread::Builder::new()
+                .name("brightness-monitor".into())
+                .spawn(move || loop {
+                    std::thread::sleep(Duration::from_secs(2));
+                    let new = read_sysfs_brightness(&poll_bl);
+                    let mut current = poll_state.lock().unwrap();
+                    if current.percent != new.percent {
+                        *current = new;
+                        drop(current);
+                        let mut subs = poll_subs.lock().unwrap();
+                        subs.retain(|tx| !tx.is_closed());
+                        for tx in subs.iter() {
+                            let _ = tx.try_send(());
+                        }
                     }
-                }
-            })
-            .expect("failed to spawn brightness monitor");
+                })
+                .expect("failed to spawn brightness monitor");
+        }
 
-        BrightnessServer { state, subscribers }
+        BrightnessServer {
+            state,
+            subscribers,
+            backlight,
+        }
     })
 }
 
@@ -78,10 +120,14 @@ fn subscribe_brightness() -> async_channel::Receiver<()> {
     rx
 }
 
-/// Force a re-query after a brightness change command
+/// Force a re-query after a brightness change command. No-op if there's no
+/// backlight (we never spawned the monitor in that case).
 fn notify_brightness_change() {
     let server = brightness_server();
-    let new = query_brightness();
+    let Some(bl) = server.backlight.as_ref() else {
+        return;
+    };
+    let new = read_sysfs_brightness(bl);
     *server.state.lock().unwrap() = new;
     let mut subs = server.subscribers.lock().unwrap();
     subs.retain(|tx| !tx.is_closed());

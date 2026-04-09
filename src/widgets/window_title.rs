@@ -1,14 +1,9 @@
 use std::path::PathBuf;
-use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::{Arc, Mutex};
-use std::time::Duration;
 
 use gpui::{
     Context, IntoElement, ParentElement, Styled, Window, div, img, px, rgb, svg,
     prelude::FluentBuilder,
 };
-use niri_ipc::socket::Socket;
-use niri_ipc::{Event, Request, Response};
 
 use super::{BarWidget, impl_render};
 
@@ -16,11 +11,6 @@ pub struct WindowTitle {
     title: String,
     app_id: String,
     icon_path: Option<PathBuf>,
-}
-
-struct SharedState {
-    title: String,
-    app_id: String,
 }
 
 /// Look up an app icon via linicon (theme + fallback), .desktop files, and pixmaps.
@@ -129,112 +119,36 @@ impl BarWidget for WindowTitle {
     const NAME: &str = "window_title";
 
     fn new(cx: &mut Context<Self>) -> Self {
-        let shared = Arc::new(Mutex::new(SharedState {
-            title: String::new(),
-            app_id: String::new(),
-        }));
-        let dirty = Arc::new(AtomicBool::new(false));
-
-        let ev_shared = shared.clone();
-        let ev_dirty = dirty.clone();
-        std::thread::spawn(move || {
-            let Ok(mut socket) = Socket::connect() else {
-                log::error!("window_title: failed to connect to niri socket");
-                return;
-            };
-
-            // Get initial focused window
-            if let Ok(Ok(Response::Windows(windows))) = socket.send(Request::Windows) {
-                if let Some(win) = windows.iter().find(|w| w.is_focused) {
-                    let mut state = ev_shared.lock().unwrap();
-                    state.title = win.title.clone().unwrap_or_default();
-                    state.app_id = win.app_id.clone().unwrap_or_default();
-                    ev_dirty.store(true, Ordering::Release);
-                }
-            }
-
-            // Event stream
-            let Ok(mut socket) = Socket::connect() else { return };
-            let Ok(Ok(Response::Handled)) = socket.send(Request::EventStream) else { return };
-
-            let mut read_event = socket.read_events();
-            let mut windows: Vec<niri_ipc::Window> = Vec::new();
-
-            loop {
-                match read_event() {
-                    Ok(event) => {
-                        match event {
-                            Event::WindowsChanged { windows: ws } => {
-                                windows = ws;
-                            }
-                            Event::WindowOpenedOrChanged { window } => {
-                                // If this window is focused, clear focus on all others
-                                if window.is_focused {
-                                    for w in &mut windows {
-                                        w.is_focused = false;
-                                    }
-                                }
-                                windows.retain(|w| w.id != window.id);
-                                windows.push(window);
-                            }
-                            Event::WindowClosed { id } => {
-                                windows.retain(|w| w.id != id);
-                            }
-                            Event::WindowFocusChanged { id } => {
-                                for w in &mut windows {
-                                    w.is_focused = Some(w.id) == id;
-                                }
-                            }
-                            _ => continue,
-                        }
-
-                        let focused = windows.iter().find(|w| w.is_focused);
-                        let mut state = ev_shared.lock().unwrap();
-                        state.title = focused
-                            .and_then(|w| w.title.clone())
-                            .unwrap_or_default();
-                        state.app_id = focused
-                            .and_then(|w| w.app_id.clone())
-                            .unwrap_or_default();
-                        ev_dirty.store(true, Ordering::Release);
-                    }
-                    Err(e) => {
-                        log::error!("window_title: event stream error: {e}");
-                        break;
-                    }
-                }
-            }
-        });
-
-        let poll_shared = shared.clone();
-        let poll_dirty = dirty.clone();
+        // Subscribe to the shared niri hub: extract focused window from each
+        // snapshot. No own thread, no polling.
+        let sub = crate::niri::broadcast().subscribe();
         cx.spawn(async move |this, cx| {
-            loop {
-                cx.background_executor()
-                    .timer(Duration::from_millis(50))
-                    .await;
+            let mut last_app_id = String::new();
+            let mut last_icon: Option<PathBuf> = None;
+            while let Some(snap) = sub.next().await {
+                let focused = snap.windows.iter().find(|w| w.is_focused);
+                let title = focused.and_then(|w| w.title.clone()).unwrap_or_default();
+                let app_id = focused.and_then(|w| w.app_id.clone()).unwrap_or_default();
 
-                if poll_dirty.load(Ordering::Acquire) {
-                    poll_dirty.store(false, Ordering::Release);
-                    let state = poll_shared.lock().unwrap();
-                    let title = state.title.clone();
-                    let app_id = state.app_id.clone();
-                    drop(state);
+                // Only re-lookup the icon when the app_id actually changes.
+                let icon_path = if app_id != last_app_id {
+                    last_app_id = app_id.clone();
+                    last_icon = lookup_icon(&app_id);
+                    last_icon.clone()
+                } else {
+                    last_icon.clone()
+                };
 
-                    // Icon lookup (blocking but fast — cached by OS)
-                    let icon_path = lookup_icon(&app_id);
-
-                    if this
-                        .update(cx, |this, cx| {
-                            this.title = title;
-                            this.app_id = app_id;
-                            this.icon_path = icon_path;
-                            cx.notify();
-                        })
-                        .is_err()
-                    {
-                        break;
-                    }
+                if this
+                    .update(cx, |this, cx| {
+                        this.title = title;
+                        this.app_id = app_id;
+                        this.icon_path = icon_path;
+                        cx.notify();
+                    })
+                    .is_err()
+                {
+                    break;
                 }
             }
         })

@@ -126,8 +126,18 @@ fn audio_server() -> &'static AudioServer {
         let ev_subs = subscribers.clone();
 
         std::thread::Builder::new().name("audio-monitor".into()).spawn(move || loop {
-            let Ok(mut child) = std::process::Command::new("pactl")
-                .arg("subscribe").stdout(std::process::Stdio::piped()).spawn()
+            use std::os::unix::process::CommandExt;
+            let mut cmd = std::process::Command::new("pactl");
+            cmd.arg("subscribe").stdout(std::process::Stdio::piped());
+            // Kill this long-lived child when the parent dies instead of
+            // leaving it orphaned to init.
+            unsafe {
+                cmd.pre_exec(|| {
+                    libc::prctl(libc::PR_SET_PDEATHSIG, libc::SIGTERM);
+                    Ok(())
+                });
+            }
+            let Ok(mut child) = cmd.spawn()
             else { std::thread::sleep(Duration::from_secs(5)); continue };
 
             let stdout = child.stdout.take().unwrap();

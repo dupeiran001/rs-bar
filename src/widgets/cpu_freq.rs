@@ -9,11 +9,14 @@
 
 use std::collections::VecDeque;
 use std::os::fd::{AsRawFd, FromRawFd, OwnedFd};
+use std::sync::OnceLock;
 
 use gpui::{
     Context, Hsla, IntoElement, ParentElement, Styled, Window, div, linear_color_stop,
     linear_gradient, px, rgb,
 };
+
+use crate::hub::Broadcast;
 
 use super::{BarWidget, impl_render};
 
@@ -201,7 +204,28 @@ fn detect_freq_range_ghz() -> (f32, f32) {
 
 // ── timerfd + epoll monitor ────────────────────────────────────────────
 
-fn freq_monitor(layout: CoreLayout, tx: async_channel::Sender<FreqReading>) {
+fn broadcast() -> &'static Broadcast<FreqReading> {
+    static BC: OnceLock<Broadcast<FreqReading>> = OnceLock::new();
+    BC.get_or_init(|| {
+        let bc = Broadcast::<FreqReading>::new();
+        let producer = bc.clone();
+        let layout = detect_layout();
+        let desc = match &layout {
+            CoreLayout::Uniform { cpus } => format!("uniform {} cores", cpus.len()),
+            CoreLayout::Hybrid { p_cpus, e_cpus } => {
+                format!("hybrid {}P+{}E cores", p_cpus.len(), e_cpus.len())
+            }
+        };
+        log::info!("cpu_freq: {desc}");
+        std::thread::Builder::new()
+            .name("cpu-freq".into())
+            .spawn(move || freq_monitor(layout, producer))
+            .ok();
+        bc
+    })
+}
+
+fn freq_monitor(layout: CoreLayout, bc: Broadcast<FreqReading>) {
     let tfd = unsafe { libc::timerfd_create(libc::CLOCK_MONOTONIC, libc::TFD_CLOEXEC) };
     if tfd < 0 { return; }
     let tfd = unsafe { OwnedFd::from_raw_fd(tfd) };
@@ -229,8 +253,7 @@ fn freq_monitor(layout: CoreLayout, tx: async_channel::Sender<FreqReading>) {
         let mut buf = [0u8; 8];
         unsafe { libc::read(tfd.as_raw_fd(), buf.as_mut_ptr().cast(), 8) };
 
-        let reading = take_reading(&layout);
-        if tx.try_send(reading).is_err() && tx.is_closed() { break; }
+        bc.publish(take_reading(&layout));
     }
 }
 
@@ -248,25 +271,11 @@ impl BarWidget for CpuFreq {
     const NAME: &str = "cpu-freq";
 
     fn new(cx: &mut Context<Self>) -> Self {
-        let layout = detect_layout();
-        let desc = match &layout {
-            CoreLayout::Uniform { cpus } => format!("uniform {} cores", cpus.len()),
-            CoreLayout::Hybrid { p_cpus, e_cpus } => {
-                format!("hybrid {}P+{}E cores", p_cpus.len(), e_cpus.len())
-            }
-        };
         let (min_freq_ghz, max_freq_ghz) = detect_freq_range_ghz();
-        log::info!("cpu_freq: {desc}, range {min_freq_ghz:.2}–{max_freq_ghz:.2} GHz");
-
-        let (tx, rx) = async_channel::bounded::<FreqReading>(1);
-
-        std::thread::Builder::new()
-            .name("cpu-freq".into())
-            .spawn(move || freq_monitor(layout, tx))
-            .ok();
+        let sub = broadcast().subscribe();
 
         cx.spawn(async move |this, cx| {
-            while let Ok(reading) = rx.recv().await {
+            while let Some(reading) = sub.next().await {
                 if this
                     .update(cx, |this, cx| {
                         this.display = reading.display;

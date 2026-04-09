@@ -5,8 +5,11 @@
 
 use std::os::fd::{AsRawFd, FromRawFd, OwnedFd};
 use std::path::PathBuf;
+use std::sync::OnceLock;
 
 use gpui::{Context, IntoElement, ParentElement, Styled, Window, div, px, rgb, svg};
+
+use crate::hub::Broadcast;
 
 use super::{BarWidget, impl_render};
 
@@ -62,7 +65,28 @@ fn read_residency_ms(path: &PathBuf) -> Option<u64> {
     std::fs::read_to_string(path).ok()?.trim().parse().ok()
 }
 
-fn gpu_busy_monitor(src: GpuBusySource, tx: async_channel::Sender<u32>) {
+fn broadcast() -> Option<&'static Broadcast<u32>> {
+    static BC: OnceLock<Option<Broadcast<u32>>> = OnceLock::new();
+    BC.get_or_init(|| {
+        let src = detect_gpu_busy()?;
+        let src_path = match &src {
+            GpuBusySource::Direct { path } | GpuBusySource::Residency { path } => {
+                path.display().to_string()
+            }
+        };
+        log::info!("gpu-busy: {src_path}");
+        let bc = Broadcast::<u32>::new();
+        let producer = bc.clone();
+        std::thread::Builder::new()
+            .name("gpu-busy".into())
+            .spawn(move || gpu_busy_monitor(src, producer))
+            .ok();
+        Some(bc)
+    })
+    .as_ref()
+}
+
+fn gpu_busy_monitor(src: GpuBusySource, bc: Broadcast<u32>) {
     let tfd = unsafe { libc::timerfd_create(libc::CLOCK_MONOTONIC, libc::TFD_CLOEXEC) };
     if tfd < 0 { return; }
     let tfd = unsafe { OwnedFd::from_raw_fd(tfd) };
@@ -112,7 +136,7 @@ fn gpu_busy_monitor(src: GpuBusySource, tx: async_channel::Sender<u32>) {
             }
         };
         if let Some(pct) = pct {
-            if tx.try_send(pct).is_err() && tx.is_closed() { break; }
+            bc.publish(pct);
         }
     }
 }
@@ -128,27 +152,23 @@ impl BarWidget for GpuBusy {
     const NAME: &str = "gpu-busy";
 
     fn new(cx: &mut Context<Self>) -> Self {
-        if let Some(src) = detect_gpu_busy() {
-            let src_path = match &src {
-                GpuBusySource::Direct { path } | GpuBusySource::Residency { path } => path.display(),
-            };
-            log::info!("gpu-busy: {src_path}");
-            let (tx, rx) = async_channel::bounded::<u32>(1);
-
-            std::thread::Builder::new()
-                .name("gpu-busy".into())
-                .spawn(move || gpu_busy_monitor(src, tx))
-                .ok();
-
+        if let Some(bc) = broadcast() {
+            let sub = bc.subscribe();
             cx.spawn(async move |this, cx| {
-                while let Ok(pct) = rx.recv().await {
-                    if this.update(cx, |this, cx| { this.pct = Some(pct); cx.notify(); }).is_err() {
+                while let Some(pct) = sub.next().await {
+                    if this
+                        .update(cx, |this, cx| {
+                            if this.pct != Some(pct) {
+                                this.pct = Some(pct);
+                                cx.notify();
+                            }
+                        })
+                        .is_err()
+                    {
                         break;
                     }
                 }
             }).detach();
-        } else {
-            log::info!("gpu-busy: no source found");
         }
 
         Self {

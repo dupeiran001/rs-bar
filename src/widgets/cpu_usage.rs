@@ -3,10 +3,16 @@
 //! Reads `/proc/stat` every second via `timerfd` + `epoll`.
 //! Computes delta between consecutive samples for accurate usage %.
 //! All sysfs/procfs reads — zero subprocesses.
+//!
+//! The sampling thread is a **singleton** shared across every bar instance
+//! (one per monitor). Widgets subscribe via [`crate::hub::Broadcast`].
 
 use std::os::fd::{AsRawFd, FromRawFd, OwnedFd};
+use std::sync::OnceLock;
 
 use gpui::{Context, IntoElement, ParentElement, Styled, Window, div, px, rgb, svg};
+
+use crate::hub::Broadcast;
 
 use super::{BarWidget, impl_render};
 
@@ -79,9 +85,24 @@ fn compute_usage(prev: &CpuTimes, cur: &CpuTimes) -> f32 {
     ((dt - di) as f32 / dt as f32) * 100.0
 }
 
-// ── timerfd + epoll monitor ────────────────────────────────────────────
+// ── singleton monitor ──────────────────────────────────────────────────
 
-fn cpu_monitor(tx: async_channel::Sender<f32>) {
+/// Global broadcast handle for CPU usage %. First call spawns the
+/// monitor thread; subsequent calls return the same handle.
+fn broadcast() -> &'static Broadcast<f32> {
+    static BC: OnceLock<Broadcast<f32>> = OnceLock::new();
+    BC.get_or_init(|| {
+        let bc = Broadcast::<f32>::new();
+        let producer = bc.clone();
+        std::thread::Builder::new()
+            .name("cpu-usage".into())
+            .spawn(move || cpu_monitor(producer))
+            .ok();
+        bc
+    })
+}
+
+fn cpu_monitor(bc: Broadcast<f32>) {
     let tfd = unsafe { libc::timerfd_create(libc::CLOCK_MONOTONIC, libc::TFD_CLOEXEC) };
     if tfd < 0 {
         log::warn!("cpu_usage: timerfd_create: {}", std::io::Error::last_os_error());
@@ -128,9 +149,7 @@ fn cpu_monitor(tx: async_channel::Sender<f32>) {
         let usage = compute_usage(&prev, &cur);
         prev = cur;
 
-        if tx.try_send(usage).is_err() && tx.is_closed() {
-            break;
-        }
+        bc.publish(usage);
     }
 }
 
@@ -145,19 +164,22 @@ impl BarWidget for CpuUsage {
     const NAME: &str = "cpu-usage";
 
     fn new(cx: &mut Context<Self>) -> Self {
-        let (tx, rx) = async_channel::bounded::<f32>(1);
-
-        std::thread::Builder::new()
-            .name("cpu-usage".into())
-            .spawn(move || cpu_monitor(tx))
-            .ok();
-
+        let sub = broadcast().subscribe();
         cx.spawn(async move |this, cx| {
-            while let Ok(usage) = rx.recv().await {
+            while let Some(usage) = sub.next().await {
                 if this
                     .update(cx, |this, cx| {
-                        this.usage = usage;
-                        cx.notify();
+                        // Skip the repaint when the displayed integer %
+                        // hasn't changed. The float value is only used to
+                        // pick a color band, whose thresholds are integer,
+                        // so the rendered output is identical when the
+                        // rounded pct matches.
+                        let new_pct = usage.round() as u32;
+                        let old_pct = this.usage.round() as u32;
+                        if new_pct != old_pct {
+                            this.usage = usage;
+                            cx.notify();
+                        }
                     })
                     .is_err()
                 {

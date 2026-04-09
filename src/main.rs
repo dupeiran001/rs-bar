@@ -8,6 +8,7 @@ use gpui::{
 use gpui_platform::application;
 
 mod config;
+mod hub;
 mod niri;
 mod theme;
 mod widgets;

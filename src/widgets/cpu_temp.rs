@@ -10,8 +10,11 @@
 
 use std::os::fd::{AsRawFd, FromRawFd, OwnedFd};
 use std::path::{Path, PathBuf};
+use std::sync::OnceLock;
 
 use gpui::{Context, IntoElement, ParentElement, Styled, Window, div, px, rgb, svg};
+
+use crate::hub::Broadcast;
 
 use super::{BarWidget, impl_render};
 
@@ -131,7 +134,20 @@ fn read_temp(source: &TempSource) -> Option<u32> {
 
 // ── timerfd + epoll monitor ────────────────────────────────────────────
 
-fn temp_monitor(tx: async_channel::Sender<u32>) {
+fn broadcast() -> &'static Broadcast<u32> {
+    static BC: OnceLock<Broadcast<u32>> = OnceLock::new();
+    BC.get_or_init(|| {
+        let bc = Broadcast::<u32>::new();
+        let producer = bc.clone();
+        std::thread::Builder::new()
+            .name("cpu-temp".into())
+            .spawn(move || temp_monitor(producer))
+            .ok();
+        bc
+    })
+}
+
+fn temp_monitor(bc: Broadcast<u32>) {
     let source = match detect_temp_source() {
         Some(s) => s,
         None => {
@@ -174,7 +190,7 @@ fn temp_monitor(tx: async_channel::Sender<u32>) {
         unsafe { libc::read(tfd.as_raw_fd(), buf.as_mut_ptr().cast(), 8) };
 
         if let Some(temp) = read_temp(&source) {
-            if tx.try_send(temp).is_err() && tx.is_closed() { break; }
+            bc.publish(temp);
         }
     }
 }
@@ -190,16 +206,20 @@ impl BarWidget for CpuTemp {
     const NAME: &str = "cpu-temp";
 
     fn new(cx: &mut Context<Self>) -> Self {
-        let (tx, rx) = async_channel::bounded::<u32>(1);
-
-        std::thread::Builder::new()
-            .name("cpu-temp".into())
-            .spawn(move || temp_monitor(tx))
-            .ok();
-
+        let sub = broadcast().subscribe();
         cx.spawn(async move |this, cx| {
-            while let Ok(temp) = rx.recv().await {
-                if this.update(cx, |this, cx| { this.temp = temp; cx.notify(); }).is_err() {
+            while let Some(temp) = sub.next().await {
+                if this
+                    .update(cx, |this, cx| {
+                        // temp is already an integer — skip paint when
+                        // unchanged.
+                        if temp != this.temp {
+                            this.temp = temp;
+                            cx.notify();
+                        }
+                    })
+                    .is_err()
+                {
                     break;
                 }
             }

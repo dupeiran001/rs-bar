@@ -57,11 +57,20 @@ fn bt_monitor(tx: async_channel::Sender<BtState>, shared: Arc<Mutex<BtState>>) {
     let max_backoff = Duration::from_secs(60);
 
     loop {
-        let Ok(mut child) = std::process::Command::new("bluetoothctl")
-            .stdout(std::process::Stdio::piped())
+        use std::os::unix::process::CommandExt;
+        let mut cmd = std::process::Command::new("bluetoothctl");
+        cmd.stdout(std::process::Stdio::piped())
             .stdin(std::process::Stdio::piped()) // keep pipe open so bluetoothctl doesn't exit on EOF
-            .stderr(std::process::Stdio::null())
-            .spawn()
+            .stderr(std::process::Stdio::null());
+        // Kill this long-lived child when the parent dies instead of
+        // leaving it orphaned to init.
+        unsafe {
+            cmd.pre_exec(|| {
+                libc::prctl(libc::PR_SET_PDEATHSIG, libc::SIGTERM);
+                Ok(())
+            });
+        }
+        let Ok(mut child) = cmd.spawn()
         else {
             log::warn!("bluetooth: bluetoothctl not found, retrying in {backoff:?}");
             std::thread::sleep(backoff);

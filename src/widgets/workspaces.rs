@@ -1,6 +1,4 @@
 use std::collections::HashMap;
-use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use gpui::{
@@ -9,15 +7,9 @@ use gpui::{
 };
 use uuid::Uuid;
 use niri_ipc::socket::Socket;
-use niri_ipc::state::EventStreamStatePart;
-use niri_ipc::{Action, Request, Response, WorkspaceReferenceArg};
+use niri_ipc::{Action, Request, WorkspaceReferenceArg};
 
 use super::{BarWidget, impl_render};
-
-struct SharedState {
-    workspaces: Vec<niri_ipc::Workspace>,
-    outputs: Vec<niri_ipc::Output>,
-}
 
 #[derive(Clone, Copy, Debug)]
 struct DotMemory {
@@ -56,89 +48,20 @@ impl BarWidget for Workspaces {
     const NAME: &str = "workspaces";
 
     fn new(cx: &mut Context<Self>) -> Self {
-        let shared = Arc::new(Mutex::new(SharedState {
-            workspaces: Vec::new(),
-            outputs: Vec::new(),
-        }));
-        let dirty = Arc::new(AtomicBool::new(false));
-
-        // Background thread: fetch outputs, then listen to workspace events
-        let ws_shared = shared.clone();
-        let ws_dirty = dirty.clone();
-        std::thread::spawn(move || {
-            // Fetch outputs on a one-shot connection
-            if let Ok(mut socket) = Socket::connect() {
-                if let Ok(Ok(Response::Outputs(outputs))) = socket.send(Request::Outputs) {
-                    ws_shared.lock().unwrap().outputs =
-                        outputs.into_values().collect();
-                    ws_dirty.store(true, Ordering::Release);
-                }
-            }
-
-            // Start event stream on a new connection
-            let Ok(mut socket) = Socket::connect() else {
-                log::error!("workspaces: failed to connect to niri socket");
-                return;
-            };
-            let Ok(Ok(Response::Handled)) = socket.send(Request::EventStream) else {
-                log::error!("workspaces: failed to start event stream");
-                return;
-            };
-
-            let mut read_event = socket.read_events();
-            let mut state = niri_ipc::state::WorkspacesState::default();
-
-            loop {
-                match read_event() {
-                    Ok(event) => {
-                        if state.apply(event).is_none() {
-                            let mut ws: Vec<_> =
-                                state.workspaces.values().cloned().collect();
-                            ws.sort_by(|a, b| {
-                                a.output.cmp(&b.output).then(a.idx.cmp(&b.idx))
-                            });
-                            ws_shared.lock().unwrap().workspaces = ws;
-                            ws_dirty.store(true, Ordering::Release);
-                        }
-                    }
-                    Err(e) => {
-                        log::error!("workspaces: event stream error: {e}");
-                        break;
-                    }
-                }
-            }
-        });
-
-        // GPUI poller: pick up changes from the background thread
-        let poll_shared = shared.clone();
-        let poll_dirty = dirty.clone();
+        // Subscribe to the shared niri hub — one event-stream thread feeds
+        // all per-bar widget instances.
+        let sub = crate::niri::broadcast().subscribe();
         cx.spawn(async move |this, cx| {
-            loop {
-                cx.background_executor()
-                    .timer(Duration::from_millis(50))
-                    .await;
-
-                if poll_dirty.load(Ordering::Acquire) {
-                    poll_dirty.store(false, Ordering::Release);
-                    let state = poll_shared.lock().unwrap();
-                    let ws = state.workspaces.clone();
-                    let outputs = state.outputs.clone();
-                    drop(state);
-
-                    if this
-                        .update(cx, |this, cx| {
-                            log::debug!(
-                                "workspaces: poll picked up update, {} workspaces",
-                                ws.len()
-                            );
-                            this.workspaces = ws;
-                            this.outputs = outputs;
-                            cx.notify();
-                        })
-                        .is_err()
-                    {
-                        break;
-                    }
+            while let Some(snap) = sub.next().await {
+                if this
+                    .update(cx, |this, cx| {
+                        this.workspaces = snap.workspaces;
+                        this.outputs = snap.outputs;
+                        cx.notify();
+                    })
+                    .is_err()
+                {
+                    break;
                 }
             }
         })

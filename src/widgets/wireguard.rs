@@ -53,11 +53,21 @@ impl BarWidget for Wireguard {
                     let mut backoff = Duration::from_secs(1);
                     let max_backoff = Duration::from_secs(60);
                     loop {
-                        let Ok(mut child) = std::process::Command::new("nmcli")
-                            .args(["monitor"])
+                        use std::os::unix::process::CommandExt;
+                        let mut cmd = std::process::Command::new("nmcli");
+                        cmd.args(["monitor"])
                             .stdout(std::process::Stdio::piped())
-                            .stdin(std::process::Stdio::null())
-                            .spawn()
+                            .stdin(std::process::Stdio::null());
+                        // Kill this child when the parent dies instead
+                        // of leaving it orphaned. Must run in the forked
+                        // child between fork and exec.
+                        unsafe {
+                            cmd.pre_exec(|| {
+                                libc::prctl(libc::PR_SET_PDEATHSIG, libc::SIGTERM);
+                                Ok(())
+                            });
+                        }
+                        let Ok(mut child) = cmd.spawn()
                         else {
                             std::thread::sleep(backoff);
                             backoff = (backoff * 2).min(max_backoff);
