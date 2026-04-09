@@ -12,8 +12,11 @@ use super::{BarWidget, impl_render};
 
 const ICON_GPU_BUSY: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/assets/icons/gpu-busy.svg");
 
-struct GpuBusySource {
-    path: PathBuf,
+enum GpuBusySource {
+    /// Direct percentage file (e.g. AMD `gpu_busy_percent`, older Intel `gt_busy_percent`).
+    Direct { path: PathBuf },
+    /// xe driver: compute busy% from `idle_residency_ms` deltas.
+    Residency { path: PathBuf },
 }
 
 fn detect_gpu_busy() -> Option<GpuBusySource> {
@@ -35,19 +38,28 @@ fn detect_gpu_busy() -> Option<GpuBusySource> {
         for f in files {
             let path = dev.join(f);
             if path.exists() && std::fs::read_to_string(&path).is_ok() {
-                return Some(GpuBusySource { path });
+                return Some(GpuBusySource::Direct { path });
+            }
+        }
+        // xe driver (Intel Battlemage / Arc): use gtidle residency
+        if vendor.trim() == "0x8086" {
+            for tile in std::fs::read_dir(dev.join("tile0")).ok()?.filter_map(Result::ok) {
+                let residency = tile.path().join("gtidle/idle_residency_ms");
+                if residency.exists() && std::fs::read_to_string(&residency).is_ok() {
+                    return Some(GpuBusySource::Residency { path: residency });
+                }
             }
         }
     }
     None
 }
 
-fn read_busy(src: &GpuBusySource) -> Option<u32> {
-    std::fs::read_to_string(&src.path)
-        .ok()?
-        .trim()
-        .parse()
-        .ok()
+fn read_busy_direct(path: &PathBuf) -> Option<u32> {
+    std::fs::read_to_string(path).ok()?.trim().parse().ok()
+}
+
+fn read_residency_ms(path: &PathBuf) -> Option<u64> {
+    std::fs::read_to_string(path).ok()?.trim().parse().ok()
 }
 
 fn gpu_busy_monitor(src: GpuBusySource, tx: async_channel::Sender<u32>) {
@@ -68,6 +80,11 @@ fn gpu_busy_monitor(src: GpuBusySource, tx: async_channel::Sender<u32>) {
     let mut ev = libc::epoll_event { events: libc::EPOLLIN as u32, u64: 0 };
     unsafe { libc::epoll_ctl(epfd.as_raw_fd(), libc::EPOLL_CTL_ADD, tfd.as_raw_fd(), &mut ev) };
 
+    let mut prev_residency: Option<u64> = match &src {
+        GpuBusySource::Residency { path } => read_residency_ms(path),
+        _ => None,
+    };
+
     loop {
         let mut out = [libc::epoll_event { events: 0, u64: 0 }; 1];
         let n = unsafe { libc::epoll_wait(epfd.as_raw_fd(), out.as_mut_ptr(), 1, -1) };
@@ -78,7 +95,23 @@ fn gpu_busy_monitor(src: GpuBusySource, tx: async_channel::Sender<u32>) {
         let mut buf = [0u8; 8];
         unsafe { libc::read(tfd.as_raw_fd(), buf.as_mut_ptr().cast(), 8) };
 
-        if let Some(pct) = read_busy(&src) {
+        let pct = match &src {
+            GpuBusySource::Direct { path } => read_busy_direct(path),
+            GpuBusySource::Residency { path } => {
+                let cur = read_residency_ms(path);
+                let result = match (prev_residency, cur) {
+                    (Some(prev), Some(cur)) if cur >= prev => {
+                        let idle_ms = cur - prev;
+                        // interval is 1000ms; clamp to 0..100
+                        Some(100u32.saturating_sub(idle_ms.min(1000) as u32 * 100 / 1000))
+                    }
+                    _ => None,
+                };
+                prev_residency = cur;
+                result
+            }
+        };
+        if let Some(pct) = pct {
             if tx.try_send(pct).is_err() && tx.is_closed() { break; }
         }
     }
@@ -96,7 +129,10 @@ impl BarWidget for GpuBusy {
 
     fn new(cx: &mut Context<Self>) -> Self {
         if let Some(src) = detect_gpu_busy() {
-            log::info!("gpu-busy: {}", src.path.display());
+            let src_path = match &src {
+                GpuBusySource::Direct { path } | GpuBusySource::Residency { path } => path.display(),
+            };
+            log::info!("gpu-busy: {src_path}");
             let (tx, rx) = async_channel::bounded::<u32>(1);
 
             std::thread::Builder::new()
