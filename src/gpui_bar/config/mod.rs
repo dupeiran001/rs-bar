@@ -2,8 +2,8 @@ use std::sync::OnceLock;
 
 use gpui::App;
 
-use crate::Bar;
-use crate::theme::Theme;
+use crate::gpui_bar::Bar;
+use crate::gpui_bar::theme::Theme;
 mod macbook;
 mod intel;
 

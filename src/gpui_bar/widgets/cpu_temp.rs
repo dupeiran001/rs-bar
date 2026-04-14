@@ -14,7 +14,7 @@ use std::sync::OnceLock;
 
 use gpui::{Context, IntoElement, ParentElement, Styled, Window, div, px, rgb, svg};
 
-use crate::hub::Broadcast;
+use crate::gpui_bar::hub::Broadcast;
 
 use super::{BarWidget, impl_render};
 
@@ -231,8 +231,8 @@ impl BarWidget for CpuTemp {
     fn set_grouped(&mut self) { self.grouped = true; }
 
     fn render(&mut self, _window: &mut Window, _cx: &mut Context<Self>) -> impl IntoElement {
-        let t = crate::config::THEME();
-        let icon_size = crate::config::ICON_SIZE();
+        let t = crate::gpui_bar::config::THEME();
+        let icon_size = crate::gpui_bar::config::ICON_SIZE();
 
         let color = if self.temp >= 88 {
             t.red

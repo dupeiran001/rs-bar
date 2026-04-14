@@ -5,14 +5,14 @@
 //! All sysfs/procfs reads — zero subprocesses.
 //!
 //! The sampling thread is a **singleton** shared across every bar instance
-//! (one per monitor). Widgets subscribe via [`crate::hub::Broadcast`].
+//! (one per monitor). Widgets subscribe via [`crate::gpui_bar::hub::Broadcast`].
 
 use std::os::fd::{AsRawFd, FromRawFd, OwnedFd};
 use std::sync::OnceLock;
 
 use gpui::{Context, IntoElement, ParentElement, Styled, Window, div, px, rgb, svg};
 
-use crate::hub::Broadcast;
+use crate::gpui_bar::hub::Broadcast;
 
 use super::{BarWidget, impl_render};
 
@@ -195,8 +195,8 @@ impl BarWidget for CpuUsage {
     fn set_grouped(&mut self) { self.grouped = true; }
 
     fn render(&mut self, _window: &mut Window, _cx: &mut Context<Self>) -> impl IntoElement {
-        let t = crate::config::THEME();
-        let icon_size = crate::config::ICON_SIZE();
+        let t = crate::gpui_bar::config::THEME();
+        let icon_size = crate::gpui_bar::config::ICON_SIZE();
         let pct = self.usage.round() as u32;
 
         let color = if self.usage >= 80.0 {

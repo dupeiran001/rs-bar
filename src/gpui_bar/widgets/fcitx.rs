@@ -69,7 +69,7 @@ impl BarWidget for Fcitx {
     }
 
     fn render(&mut self, _window: &mut Window, _cx: &mut Context<Self>) -> impl IntoElement {
-        let t = crate::config::THEME();
+        let t = crate::gpui_bar::config::THEME();
 
         let (label, color) = match self.im {
             InputMethod::Chinese => ("中", t.purple),
@@ -77,7 +77,7 @@ impl BarWidget for Fcitx {
             InputMethod::Unknown => ("?", t.yellow),
         };
 
-        let content_h = crate::config::CONTENT_HEIGHT();
+        let content_h = crate::gpui_bar::config::CONTENT_HEIGHT();
         let button_h = content_h - 4.0;
 
         super::capsule(

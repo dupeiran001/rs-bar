@@ -15,7 +15,7 @@ pub struct WindowTitle {
 
 /// Look up an app icon via linicon (theme + fallback), .desktop files, and pixmaps.
 fn lookup_icon(app_id: &str) -> Option<PathBuf> {
-    let theme = crate::config::ICON_THEME();
+    let theme = crate::gpui_bar::config::ICON_THEME();
     let short = app_id.rsplit('.').next().unwrap_or(app_id);
     let candidates = [
         app_id.to_string(),
@@ -121,7 +121,7 @@ impl BarWidget for WindowTitle {
     fn new(cx: &mut Context<Self>) -> Self {
         // Subscribe to the shared niri hub: extract focused window from each
         // snapshot. No own thread, no polling.
-        let sub = crate::niri::broadcast().subscribe();
+        let sub = crate::gpui_bar::niri::broadcast().subscribe();
         cx.spawn(async move |this, cx| {
             let mut last_app_id = String::new();
             let mut last_icon: Option<PathBuf> = None;
@@ -162,9 +162,9 @@ impl BarWidget for WindowTitle {
     }
 
     fn render(&mut self, _window: &mut Window, _cx: &mut Context<Self>) -> impl IntoElement {
-        let t = crate::config::THEME();
-        let content_h = crate::config::CONTENT_HEIGHT();
-        let icon_size = crate::config::ICON_SIZE();
+        let t = crate::gpui_bar::config::THEME();
+        let content_h = crate::gpui_bar::config::CONTENT_HEIGHT();
+        let icon_size = crate::gpui_bar::config::ICON_SIZE();
 
         div()
             .flex()

@@ -189,9 +189,9 @@ impl BarWidget for Brightness {
     }
 
     fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
-        let t = crate::config::THEME();
-        let content_h = crate::config::CONTENT_HEIGHT();
-        let icon_size = crate::config::ICON_SIZE();
+        let t = crate::gpui_bar::config::THEME();
+        let content_h = crate::gpui_bar::config::CONTENT_HEIGHT();
+        let icon_size = crate::gpui_bar::config::ICON_SIZE();
         let entity = cx.weak_entity();
         let pct = self.state.percent;
         let expanded = self.show_expanded;
@@ -266,8 +266,8 @@ impl BarWidget for Brightness {
             }
         }
 
-        let up_cmd = crate::config::BRIGHTNESS_UP_CMD();
-        let down_cmd = crate::config::BRIGHTNESS_DOWN_CMD();
+        let up_cmd = crate::gpui_bar::config::BRIGHTNESS_UP_CMD();
+        let down_cmd = crate::gpui_bar::config::BRIGHTNESS_DOWN_CMD();
 
         div()
             .id("brightness")

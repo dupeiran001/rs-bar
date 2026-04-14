@@ -209,9 +209,9 @@ impl BarWidget for Volume {
     }
 
     fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
-        let t = crate::config::THEME();
-        let content_h = crate::config::CONTENT_HEIGHT();
-        let icon_size = crate::config::ICON_SIZE();
+        let t = crate::gpui_bar::config::THEME();
+        let content_h = crate::gpui_bar::config::CONTENT_HEIGHT();
+        let icon_size = crate::gpui_bar::config::ICON_SIZE();
         let entity = cx.weak_entity();
         let volume_pct = (self.state.volume * 100.0).round() as u32;
         let expanded = self.show_expanded;

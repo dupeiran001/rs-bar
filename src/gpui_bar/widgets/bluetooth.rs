@@ -255,7 +255,7 @@ impl BarWidget for Bluetooth {
     fn set_grouped(&mut self) { self.grouped = true; }
 
     fn render(&mut self, _window: &mut Window, _cx: &mut Context<Self>) -> impl IntoElement {
-        let t = crate::config::THEME();
+        let t = crate::gpui_bar::config::THEME();
 
         let icon_path = bt_icon(&self.state);
         let color = match self.state {
@@ -264,7 +264,7 @@ impl BarWidget for Bluetooth {
             BtState::Connected => t.blue,
         };
 
-        let content_h = crate::config::CONTENT_HEIGHT();
+        let content_h = crate::gpui_bar::config::CONTENT_HEIGHT();
         let button_h = content_h - 4.0;
 
         super::capsule(
@@ -276,7 +276,7 @@ impl BarWidget for Bluetooth {
                 .child(
                     svg()
                         .external_path(icon_path.to_string())
-                        .size(px(crate::config::ICON_SIZE()))
+                        .size(px(crate::gpui_bar::config::ICON_SIZE()))
                         .text_color(rgb(color))
                         .flex_shrink_0(),
                 ),

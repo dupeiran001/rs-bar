@@ -159,9 +159,9 @@ impl BarWidget for Battery {
     }
 
     fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
-        let t = crate::config::THEME();
-        let content_h = crate::config::CONTENT_HEIGHT();
-        let icon_size = crate::config::ICON_SIZE();
+        let t = crate::gpui_bar::config::THEME();
+        let content_h = crate::gpui_bar::config::CONTENT_HEIGHT();
+        let icon_size = crate::gpui_bar::config::ICON_SIZE();
         let entity = cx.weak_entity();
         let expanded = self.show_expanded;
         let animate = self.ever_expanded;

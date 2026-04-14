@@ -215,7 +215,7 @@ impl BarWidget for PkgUpdate {
     fn set_grouped(&mut self) { self.grouped = true; }
 
     fn render(&mut self, _window: &mut Window, _cx: &mut Context<Self>) -> impl IntoElement {
-        let t = crate::config::THEME();
+        let t = crate::gpui_bar::config::THEME();
 
         let total = self.state.total();
         let (icon_path, color) = if total == 0 {
@@ -230,7 +230,7 @@ impl BarWidget for PkgUpdate {
             )
         };
 
-        let content_h = crate::config::CONTENT_HEIGHT();
+        let content_h = crate::gpui_bar::config::CONTENT_HEIGHT();
         let button_h = content_h - 4.0;
 
         super::capsule(
@@ -242,7 +242,7 @@ impl BarWidget for PkgUpdate {
                 .child(
                     svg()
                         .external_path(icon_path.to_string())
-                        .size(px(crate::config::ICON_SIZE()))
+                        .size(px(crate::gpui_bar::config::ICON_SIZE()))
                         .text_color(rgb(color))
                         .flex_shrink_0(),
                 ),

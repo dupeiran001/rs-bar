@@ -15,7 +15,7 @@ use std::time::Instant;
 
 use gpui::{Context, IntoElement, ParentElement, Styled, Window, div, px, rgb, svg};
 
-use crate::hub::Broadcast;
+use crate::gpui_bar::hub::Broadcast;
 
 use super::{BarWidget, impl_render};
 
@@ -391,7 +391,7 @@ fn delta_watts(cur: u64, prev: u64, max: u64, dt: f64) -> f64 {
 fn icon_el(path: &str, color: u32) -> impl IntoElement {
     svg()
         .external_path(path.to_string())
-        .size(px(crate::config::ICON_SIZE()))
+        .size(px(crate::gpui_bar::config::ICON_SIZE()))
         .text_color(rgb(color))
         .flex_shrink_0()
 }
@@ -516,7 +516,7 @@ impl BarWidget for BatteryDraw {
     }
 
     fn render(&mut self, _window: &mut Window, _cx: &mut Context<Self>) -> impl IntoElement {
-        let t = crate::config::THEME();
+        let t = crate::gpui_bar::config::THEME();
 
         let Some(r) = &self.reading else {
             return super::capsule(div(), self.grouped);
@@ -654,7 +654,7 @@ impl BarWidget for CpuDraw {
     }
 
     fn render(&mut self, _window: &mut Window, _cx: &mut Context<Self>) -> impl IntoElement {
-        let t = crate::config::THEME();
+        let t = crate::gpui_bar::config::THEME();
 
         let Some(r) = &self.reading else {
             return super::capsule(div(), self.grouped);
@@ -794,7 +794,7 @@ impl BarWidget for PsysDraw {
     }
 
     fn render(&mut self, _window: &mut Window, _cx: &mut Context<Self>) -> impl IntoElement {
-        let t = crate::config::THEME();
+        let t = crate::gpui_bar::config::THEME();
 
         let Some(r) = &self.reading else {
             return super::capsule(div(), self.grouped);
@@ -932,7 +932,7 @@ impl BarWidget for GpuDraw {
     }
 
     fn render(&mut self, _window: &mut Window, _cx: &mut Context<Self>) -> impl IntoElement {
-        let t = crate::config::THEME();
+        let t = crate::gpui_bar::config::THEME();
 
         let Some(r) = &self.reading else {
             return super::capsule(div(), self.grouped);

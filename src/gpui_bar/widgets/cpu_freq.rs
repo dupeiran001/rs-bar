@@ -16,7 +16,7 @@ use gpui::{
     linear_gradient, px, rgb,
 };
 
-use crate::hub::Broadcast;
+use crate::gpui_bar::hub::Broadcast;
 
 use super::{BarWidget, impl_render};
 
@@ -305,7 +305,7 @@ impl BarWidget for CpuFreq {
     fn set_grouped(&mut self) { self.grouped = true; }
 
     fn render(&mut self, _window: &mut Window, _cx: &mut Context<Self>) -> impl IntoElement {
-        let t = crate::config::THEME();
+        let t = crate::gpui_bar::config::THEME();
 
         // Build sparkline: filled vertical bars, one per sample, right-aligned
         // (newest sample on the right). The top edge of the bars traces the
@@ -369,7 +369,7 @@ impl BarWidget for CpuFreq {
         // Build the text portion. For hybrid CPUs we render P and E values
         // with a 1px vertical line between them — visually consistent with
         // the group!() macro separator.
-        let content_h = crate::config::CONTENT_HEIGHT();
+        let content_h = crate::gpui_bar::config::CONTENT_HEIGHT();
         let sep_h = ((content_h - 4.0) - 10.0).max(6.0);
         let text_el = match &self.display {
             FreqDisplay::Single(s) => div().text_color(rgb(t.fg)).child(s.clone()).into_any_element(),

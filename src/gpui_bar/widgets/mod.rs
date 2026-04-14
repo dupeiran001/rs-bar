@@ -71,7 +71,7 @@ macro_rules! impl_render {
                     window: &mut ::gpui::Window,
                     cx: &mut ::gpui::Context<Self>,
                 ) -> impl ::gpui::IntoElement {
-                    <Self as $crate::widgets::BarWidget>::render(self, window, cx)
+                    <Self as $crate::gpui_bar::widgets::BarWidget>::render(self, window, cx)
                 }
             }
         )+
@@ -128,8 +128,8 @@ struct WidgetGroup {
 
 impl Render for WidgetGroup {
     fn render(&mut self, _window: &mut Window, _cx: &mut Context<Self>) -> impl IntoElement {
-        let t = crate::config::THEME();
-        let content_h = crate::config::CONTENT_HEIGHT();
+        let t = crate::gpui_bar::config::THEME();
+        let content_h = crate::gpui_bar::config::CONTENT_HEIGHT();
         let button_h = content_h - 4.0;
         let radius = button_h / 2.0;
 
@@ -178,22 +178,22 @@ impl Render for WidgetGroup {
 /// Widgets are separated by commas. Use `|` for a visual separator (│).
 macro_rules! group {
     (@item $cx:expr, $entries:ident, |) => {
-        $entries.push($crate::widgets::GroupEntry::Separator);
+        $entries.push($crate::gpui_bar::widgets::GroupEntry::Separator);
     };
     (@item $cx:expr, $entries:ident, $w:ident) => {{
-        use $crate::widgets::BarWidget as _;
+        use $crate::gpui_bar::widgets::BarWidget as _;
         use ::gpui::AppContext as _;
         let entity = $cx.new(|cx| {
             let mut w = $w::new(cx);
             w.set_grouped();
             w
         });
-        $entries.push($crate::widgets::GroupEntry::Widget(entity.into()));
+        $entries.push($crate::gpui_bar::widgets::GroupEntry::Widget(entity.into()));
     }};
     ($cx:expr, $($item:tt),* $(,)?) => {{
-        let mut entries: Vec<$crate::widgets::GroupEntry> = Vec::new();
+        let mut entries: Vec<$crate::gpui_bar::widgets::GroupEntry> = Vec::new();
         $(group!(@item $cx, entries, $item);)*
-        $crate::widgets::Widget::build_group(entries, $cx)
+        $crate::gpui_bar::widgets::Widget::build_group(entries, $cx)
     }};
 }
 pub(crate) use group;
@@ -204,8 +204,8 @@ pub(crate) fn capsule(el: gpui::Div, grouped: bool) -> gpui::Div {
     if grouped {
         el
     } else {
-        let t = crate::config::THEME();
-        let content_h = crate::config::CONTENT_HEIGHT();
+        let t = crate::gpui_bar::config::THEME();
+        let content_h = crate::gpui_bar::config::CONTENT_HEIGHT();
         let button_h = content_h - 4.0;
         let radius = button_h / 2.0;
         el.h(px(button_h))

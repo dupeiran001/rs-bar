@@ -21,7 +21,7 @@ use niri_ipc::socket::Socket;
 use niri_ipc::state::{EventStreamStatePart, WindowsState, WorkspacesState};
 use niri_ipc::{Event, Request, Response};
 
-use crate::hub::Broadcast;
+use crate::gpui_bar::hub::Broadcast;
 
 /// Complete niri state snapshot. Cloned per subscriber on publish, so keep it
 /// lean — the Vec fields reuse niri_ipc types that already implement Clone.
