@@ -56,6 +56,11 @@ fn ensure_css() {
 pub struct Wireguard {
     /// Last-seen tunnel state, kept for the displayed-value coalescing check.
     active: bool,
+    /// Whether the first hub Update has been applied. On the very first
+    /// message we *must* render even when `active` matches the seed value
+    /// (otherwise an actually-up tunnel renders as off because both the
+    /// model default and the hub-seeded false-default were `false`).
+    initialized: bool,
     grouped: bool,
     /// Held so `update` can swap the paintable + class when the state flips.
     icon: gtk::Image,
@@ -92,8 +97,9 @@ impl SimpleComponent for Wireguard {
     ) -> ComponentParts<Self> {
         ensure_css();
         let widgets = view_output!();
-        let mut model = Wireguard {
+        let model = Wireguard {
             active: false,
+            initialized: false,
             grouped: init.grouped,
             icon: widgets.icon.clone(),
         };
@@ -103,13 +109,6 @@ impl SimpleComponent for Wireguard {
         // Cursor → pointer over the clickable area, mirroring rs-bar's
         // `.cursor_pointer()` GPUI styling.
         root.set_cursor_from_name(Some("pointer"));
-
-        // Seed the displayed state to the initial off-class so the icon has
-        // a deterministic color before the first hub publish lands.
-        set_exclusive_class(&model.icon, "wireguard-off", COLOR_CLASSES);
-        // Force the next Update message to apply (because the seeded `active`
-        // matches the default `false` from the hub on a cold start).
-        model.active = true;
 
         // Subscription: bridge the watch::Receiver<bool> into component messages.
         let mut rx = hub::wireguard::subscribe();
@@ -138,9 +137,10 @@ impl SimpleComponent for Wireguard {
     fn update(&mut self, msg: Self::Input, _sender: ComponentSender<Self>) {
         match msg {
             WireguardMsg::Update(active) => {
-                if active == self.active {
+                if self.initialized && active == self.active {
                     return;
                 }
+                self.initialized = true;
                 self.active = active;
                 let (name, class) = if active {
                     (ICON_ON, "wireguard-on")
