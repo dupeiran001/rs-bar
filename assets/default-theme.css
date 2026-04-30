@@ -216,6 +216,46 @@ popover.background > contents {
     box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
 }
 
+/* Generic popover buttons — applies to every <button> living inside one of
+   our popovers. Specificity (`popover.background button`) outranks GTK's
+   default button theme so the cascade gives us @rs_fg / @rs_surface even
+   for anonymous buttons (e.g. ListBox row buttons). */
+popover.background button {
+    background-color: @rs_surface;
+    color: @rs_fg;
+    border: 1px solid @rs_border_highlight;
+    border-radius: 4px;
+    padding: 4px 10px;
+    box-shadow: none;
+    text-shadow: none;
+    -gtk-icon-shadow: none;
+}
+popover.background button:hover {
+    background-color: @rs_border_highlight;
+    color: @rs_fg;
+}
+popover.background button:active {
+    background-color: @rs_accent;
+    color: @rs_bg;
+}
+popover.background button:disabled {
+    background-color: @rs_surface;
+    color: @rs_fg_dark;
+}
+
+/* Flat buttons (GTK-native chrome-stripped) — keep transparent but
+   force our text colour so they stay readable on dark backgrounds. */
+button.flat {
+    color: @rs_fg;
+    background: transparent;
+    border: none;
+    box-shadow: none;
+}
+button.flat:hover {
+    background-color: @rs_border_highlight;
+    color: @rs_fg;
+}
+
 /* Calendar (clock popover) */
 .clock-popover { min-width: 220px; }
 .clock-popover-time {
@@ -301,15 +341,18 @@ dropdown > button {
     font-weight: 700;
     margin-bottom: 6px;
 }
-.wifi-refresh, .wifi-disconnect {
+.wifi-refresh, .wifi-disconnect,
+.bluetooth-device-button, .volume-mute-toggle {
     background-color: @rs_surface;
     color: @rs_fg;
     border: 1px solid @rs_border_highlight;
     border-radius: 4px;
     padding: 4px 10px;
 }
-.wifi-refresh:hover, .wifi-disconnect:hover {
+.wifi-refresh:hover, .wifi-disconnect:hover,
+.bluetooth-device-button:hover, .volume-mute-toggle:hover {
     background-color: @rs_border_highlight;
+    color: @rs_fg;
 }
 .wifi-list { background-color: transparent; }
 .wifi-list row {
