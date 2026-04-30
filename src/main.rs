@@ -1,7 +1,6 @@
-const BACKEND: &str = "GPUI";
-
 mod gpui_bar;
 mod iced_bar;
+mod relm4_bar;
 
 fn main() {
     // Suppress zbus/tokio "no reactor running" panics on worker threads.
@@ -16,9 +15,10 @@ fn main() {
         default_hook(info);
     }));
 
-    match BACKEND {
-        "GPUI" => gpui_bar::run(),
-        "ICED" => iced_bar::run(),
-        _ => panic!("Unknown backend: {BACKEND}"),
+    let use_relm = std::env::args().any(|a| a == "--relm");
+    if use_relm {
+        relm4_bar::run();
+    } else {
+        gpui_bar::run();
     }
 }
