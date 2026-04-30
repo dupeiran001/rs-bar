@@ -12,7 +12,7 @@ use crate::relm4_bar::config;
 use crate::relm4_bar::hub;
 use crate::relm4_bar::hub::bluetooth::{BluetoothState, DeviceInfo};
 
-use super::{NamedWidget, WidgetInit, capsule, set_exclusive_class};
+use super::{NamedWidget, WidgetInit, capsule_icon, set_exclusive_class};
 
 const ICON_OFF: &str = "bluetooth-off-symbolic";
 const ICON_ON: &str = "bluetooth-on-symbolic";
@@ -165,7 +165,7 @@ impl SimpleComponent for Bluetooth {
             suppress_switch,
         };
 
-        capsule(&root, model.grouped);
+        capsule_icon(&root, model.grouped);
         set_exclusive_class(&model.icon, model.icon_state.class(), STATE_CLASSES);
 
         // Subscription: bridge the watch::Receiver<BluetoothState> into messages.

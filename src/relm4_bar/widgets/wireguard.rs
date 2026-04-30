@@ -19,7 +19,7 @@ use relm4::prelude::*;
 use crate::relm4_bar::config;
 use crate::relm4_bar::hub;
 
-use super::{NamedWidget, WidgetInit, capsule, set_exclusive_class};
+use super::{NamedWidget, WidgetInit, capsule_icon, set_exclusive_class};
 
 const ICON_ON: &str = "vpn-on-symbolic";
 const ICON_OFF: &str = "vpn-off-symbolic";
@@ -104,7 +104,7 @@ impl SimpleComponent for Wireguard {
             icon: widgets.icon.clone(),
         };
 
-        capsule(&root, model.grouped);
+        capsule_icon(&root, model.grouped);
 
         // Cursor → pointer over the clickable area, mirroring rs-bar's
         // `.cursor_pointer()` GPUI styling.

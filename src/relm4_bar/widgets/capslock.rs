@@ -12,7 +12,7 @@ use relm4::prelude::*;
 use crate::relm4_bar::config;
 use crate::relm4_bar::hub;
 
-use super::{NamedWidget, WidgetInit, capsule};
+use super::{NamedWidget, WidgetInit, capsule_icon};
 
 const ICON_NAME: &str = "capslock-symbolic";
 
@@ -61,7 +61,7 @@ impl SimpleComponent for CapsLock {
             icon: widgets.icon.clone(),
         };
 
-        capsule(&root, model.grouped);
+        capsule_icon(&root, model.grouped);
 
         let mut rx = hub::capslock::subscribe();
         let s = sender.clone();

@@ -159,6 +159,18 @@ pub fn capsule(w: &impl glib::object::IsA<gtk::Widget>, grouped: bool) {
     }
 }
 
+/// Variant for widgets whose content is a single icon (or a single short
+/// glyph, like the Fcitx label). Adds `bar-capsule-icon` alongside
+/// `bar-capsule` so the CSS pins the box to a square — making it render as
+/// a circle at the bar's pill border-radius. The capsule still grows to a
+/// pill if content ever exceeds the square's width.
+pub fn capsule_icon(w: &impl glib::object::IsA<gtk::Widget>, grouped: bool) {
+    if !grouped {
+        w.add_css_class("bar-capsule");
+        w.add_css_class("bar-capsule-icon");
+    }
+}
+
 /// Toggle a widget into exactly one CSS class out of a mutually-exclusive set,
 /// stripping all the others first. Used for color bands / on-off states.
 ///

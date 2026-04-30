@@ -11,7 +11,7 @@ use relm4::prelude::*;
 use crate::relm4_bar::hub;
 use crate::relm4_bar::hub::fcitx::FcitxIm;
 
-use super::{NamedWidget, WidgetInit, capsule, set_exclusive_class};
+use super::{NamedWidget, WidgetInit, capsule_icon, set_exclusive_class};
 
 /// CSS classes for the three states. `set_exclusive_class` strips the others
 /// before adding the chosen one so stale classes can't accumulate.
@@ -60,7 +60,7 @@ impl SimpleComponent for Fcitx {
             label: widgets.label.clone(),
         };
 
-        capsule(&root, model.grouped);
+        capsule_icon(&root, model.grouped);
 
         // Subscription: bridge the watch::Receiver<FcitxState> into messages.
         let mut rx = hub::fcitx::subscribe();

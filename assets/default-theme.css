@@ -43,6 +43,15 @@ window.rs-bar {
     margin: 4px 2px;
 }
 
+/* Icon-only capsules (Bluetooth, Fcitx, Power, CapsLock, Wireguard):
+   pin to a square so they render as a circle at the pill border-radius.
+   GTK's flex still lets them grow horizontally if content exceeds the
+   square — they'll become true pills again when that happens. */
+.bar-capsule.bar-capsule-icon {
+    padding: 0;
+    min-width: 24px;
+}
+
 .bar-border-top, .bar-border-bottom {
     background-color: @rs_bg;
     min-height: 1px;
