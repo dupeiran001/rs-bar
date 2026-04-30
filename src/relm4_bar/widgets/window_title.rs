@@ -24,6 +24,9 @@ pub struct WindowTitle {
     /// Last-rendered title text, kept for the displayed-value coalescing
     /// check in `update`.
     title: String,
+    /// Root box, held so `update` can hide the entire capsule when there's
+    /// no focused window to show.
+    root: gtk::Box,
     /// Held so `update` can rewrite the label text.
     label: gtk::Label,
 }
@@ -77,10 +80,13 @@ impl SimpleComponent for WindowTitle {
         let model = WindowTitle {
             connector,
             title: String::new(),
+            root: root.clone(),
             label: widgets.label.clone(),
         };
 
         capsule(&root, init.grouped);
+        // Start hidden — we'll un-hide on the first non-empty title.
+        root.set_visible(false);
 
         // Subscription: forward NiriSnapshot updates as component messages.
         // Send the current value first so the widget renders immediately.
@@ -135,6 +141,9 @@ impl SimpleComponent for WindowTitle {
                 }
                 self.title = new_title;
                 self.label.set_label(&self.title);
+                // Hide the entire capsule when there's no title to show, so
+                // we don't render an empty pill.
+                self.root.set_visible(!self.title.is_empty());
             }
         }
     }

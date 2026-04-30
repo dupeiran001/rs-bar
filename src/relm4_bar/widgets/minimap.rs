@@ -18,6 +18,9 @@ pub struct Minimap {
     /// Connector name (e.g. "DP-2") captured from `BAR_CTX` in `init`. Used
     /// to find this bar's monitor in the snapshot's workspaces/outputs.
     connector: String,
+    /// Root box, held so `update` can hide the entire capsule when this
+    /// monitor's active workspace has no windows.
+    root: gtk::Box,
     /// Dynamic absolute-positioned container — children are rebuilt on every
     /// `Update`.
     container: gtk::Fixed,
@@ -73,12 +76,15 @@ impl SimpleComponent for Minimap {
         let connector = super::current_connector().unwrap_or_default();
         let model = Minimap {
             connector,
+            root: root.clone(),
             container: widgets.container.clone(),
             row: widgets.row.clone(),
             last_key: None,
         };
 
         capsule(&root, init.grouped);
+        // Start hidden — we'll un-hide as soon as any windows are placed.
+        root.set_visible(false);
 
         // Subscription: forward NiriSnapshot updates as component messages.
         // Send the current value first so the widget renders immediately.
@@ -198,6 +204,14 @@ impl SimpleComponent for Minimap {
                 while let Some(child) = self.container.first_child() {
                     self.container.remove(&child);
                 }
+
+                // Hide the entire capsule when there are no windows on this
+                // monitor's active workspace, so we don't render an empty pill.
+                if tiles.is_empty() {
+                    self.root.set_visible(false);
+                    return;
+                }
+                self.root.set_visible(true);
 
                 self.container.set_size_request(map_w as i32, map_h as i32);
                 self.row.set_size_request(map_w as i32, -1);
