@@ -1,0 +1,389 @@
+/* assets/default-theme.css — bundled default theme for rs-bar-relm4.
+ *
+ * Reference @rs_* colors defined at runtime from the active Theme struct in
+ * src/theme/. Users override by editing ~/.config/rs-bar/gtk-theme.css.
+ *
+ * Structure:
+ *   1. Bar shell: window, zones, capsules, group separators, top/bottom borders.
+ *   2. Per-widget color states: every class toggled by a widget's update()
+ *      gets a rule here so the visual fidelity matches the GPUI version.
+ *   3. Popovers: Calendar, Scale (volume/brightness), DropDown, ListBox rows.
+ */
+
+/* ── 1. Bar shell ───────────────────────────────────────────── */
+
+window.rs-bar {
+    background-color: @rs_bg;
+    color: @rs_fg;
+    font-family: "CaskaydiaCove Nerd Font", "Cascadia Code", monospace;
+    font-weight: 600;
+    font-size: 12px;
+}
+
+.bar-zone {
+    padding: 0 8px;
+}
+
+.bar-capsule, .bar-group {
+    background-color: @rs_surface;
+    border: 1px solid @rs_border;
+    border-radius: 9999px;
+    padding: 2px 6px;
+    min-height: 0;
+}
+
+.bar-group {
+    padding: 2px 4px;
+}
+
+.bar-group separator {
+    background-color: @rs_fg_gutter;
+    min-width: 1px;
+    margin: 4px 2px;
+}
+
+.bar-border-top, .bar-border-bottom {
+    background-color: @rs_bg;
+    min-height: 1px;
+}
+
+/* ── 2. Per-widget color states ─────────────────────────────── */
+
+/* CPU usage % */
+.cpu-usage-crit { color: @rs_red;     }
+.cpu-usage-warn { color: @rs_orange;  }
+.cpu-usage-norm { color: @rs_fg;      }
+.cpu-usage-dim  { color: @rs_fg_dark; }
+
+/* CPU temperature — three tiers (88+ hot, 75+ warm, else cool) */
+.cpu-temp-hot   { color: @rs_red;      }
+.cpu-temp-warm  { color: @rs_orange;   }
+.cpu-temp-cool  { color: @rs_fg_dark;  }
+
+/* Memory % */
+.memory-crit { color: @rs_red;     }
+.memory-warn { color: @rs_orange;  }
+.memory-norm { color: @rs_fg;      }
+.memory-dim  { color: @rs_fg_dark; }
+
+/* GPU busy */
+.gpu-busy-crit { color: @rs_red;     }
+.gpu-busy-warn { color: @rs_orange;  }
+.gpu-busy-norm { color: @rs_fg;      }
+.gpu-busy-dim  { color: @rs_fg_dark; }
+
+/* Power draw — battery */
+.battery-draw-crit { color: @rs_red;     }
+.battery-draw-warn { color: @rs_orange;  }
+.battery-draw-norm { color: @rs_fg;      }
+.battery-draw-dim  { color: @rs_fg_dark; }
+
+/* Power draw — CPU */
+.cpu-draw-crit { color: @rs_red;     }
+.cpu-draw-warn { color: @rs_orange;  }
+.cpu-draw-norm { color: @rs_fg;      }
+.cpu-draw-dim  { color: @rs_fg_dark; }
+
+/* Power draw — Psys */
+.psys-draw-crit { color: @rs_red;     }
+.psys-draw-warn { color: @rs_orange;  }
+.psys-draw-norm { color: @rs_fg;      }
+.psys-draw-dim  { color: @rs_fg_dark; }
+
+/* Power draw — GPU */
+.gpu-draw-crit { color: @rs_red;     }
+.gpu-draw-warn { color: @rs_orange;  }
+.gpu-draw-norm { color: @rs_fg;      }
+.gpu-draw-dim  { color: @rs_fg_dark; }
+
+/* Battery widget (capacity + status) */
+.battery-charging { color: @rs_green;   }
+.battery-full     { color: @rs_green;   }
+.battery-norm     { color: @rs_fg;      }
+.battery-low      { color: @rs_orange;  }
+.battery-crit     { color: @rs_red;     }
+
+/* Brightness — icon swap */
+.brightness-low  { color: @rs_yellow; }
+.brightness-high { color: @rs_yellow; }
+
+/* Volume */
+.volume-muted { color: @rs_red;      }
+.volume-low   { color: @rs_fg_dark;  }
+.volume-mid   { color: @rs_fg;       }
+.volume-high  { color: @rs_accent;   }
+
+/* WiFi */
+.wifi-disconnected { color: @rs_fg_dark;  }
+.wifi-low          { color: @rs_orange;   }
+.wifi-mid          { color: @rs_fg;       }
+.wifi-high         { color: @rs_accent;   }
+
+/* Bluetooth */
+.bluetooth-off       { color: @rs_fg_dark;  }
+.bluetooth-on        { color: @rs_fg;       }
+.bluetooth-connected { color: @rs_accent;   }
+
+/* CapsLock */
+.capslock-active { color: @rs_yellow; }
+
+/* Wireguard */
+.wireguard-on  { color: @rs_green;    }
+.wireguard-off { color: @rs_fg_dark;  }
+
+/* Pkg update */
+.pkg-update-pending { color: @rs_orange;  }
+.pkg-update-ok      { color: @rs_fg_dark; }
+
+/* Fcitx */
+.fcitx-chinese { color: @rs_accent;   }
+.fcitx-english { color: @rs_fg_dark;  }
+.fcitx-unknown { color: @rs_fg_dark;  }
+
+/* Clock */
+.clock-time { color: @rs_accent;     font-size: 11px; line-height: 12px; }
+.clock-date { color: @rs_accent_dim; font-size: 9px;  line-height: 10px; }
+
+/* Date */
+.date-label { color: @rs_fg; }
+
+/* Window title */
+.window-title { color: @rs_fg; }
+
+/* Workspaces */
+.workspace-pill {
+    padding: 0 8px;
+    border-radius: 9999px;
+    color: @rs_fg_dark;
+    min-width: 8px;
+}
+.workspace-pill.workspace-active {
+    background-color: @rs_accent;
+    color: @rs_bg;
+}
+.workspace-pill.workspace-urgent {
+    background-color: @rs_red;
+    color: @rs_bg;
+}
+
+/* Minimap window dots */
+.minimap-window {
+    background-color: @rs_fg_gutter;
+    border-radius: 2px;
+    border: 1px solid @rs_border_highlight;
+    margin: 1px;
+}
+.minimap-window-focused {
+    background-color: @rs_accent_dim;
+    border-color: @rs_accent;
+}
+.minimap-window-active {
+    background-color: @rs_accent;
+    border-color: @rs_accent;
+}
+.minimap-window-overview {
+    opacity: 0.6;
+}
+
+/* Tray */
+.tray-icon-button {
+    padding: 2px;
+    background: transparent;
+    border: none;
+    box-shadow: none;
+    min-height: 0;
+    min-width: 0;
+}
+.tray-icon-button:hover {
+    background-color: @rs_border_highlight;
+    border-radius: 4px;
+}
+.tray-icon {
+    -gtk-icon-size: 16px;
+}
+
+/* Power button (logout menu trigger) */
+.power-button {
+    color: @rs_red;
+}
+
+/* ── 3. Popovers ────────────────────────────────────────────── */
+
+/* All popovers — bg, border, padding, font */
+popover.background > contents {
+    background-color: @rs_bg;
+    color: @rs_fg;
+    border: 1px solid @rs_border_highlight;
+    border-radius: 8px;
+    padding: 12px;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
+}
+
+/* Calendar (clock popover) */
+.clock-popover { min-width: 220px; }
+.clock-popover-time {
+    color: @rs_fg;
+    font-size: 22px;
+    font-weight: 700;
+    margin-bottom: 4px;
+}
+.clock-popover-date {
+    color: @rs_text_dim;
+    margin-bottom: 8px;
+}
+calendar {
+    background-color: @rs_bg;
+    color: @rs_fg;
+}
+calendar:selected {
+    background-color: @rs_accent;
+    color: @rs_bg;
+}
+calendar.today {
+    color: @rs_accent;
+    font-weight: 700;
+}
+
+/* Scales (volume / brightness sliders) */
+.volume-popover, .brightness-popover {
+    min-width: 200px;
+}
+scale {
+    min-width: 160px;
+    padding: 6px 0;
+}
+scale trough {
+    background-color: @rs_surface;
+    border-radius: 4px;
+    min-height: 4px;
+}
+scale highlight {
+    background-color: @rs_accent;
+    border-radius: 4px;
+}
+scale slider {
+    background-color: @rs_fg;
+    border-radius: 50%;
+    min-width: 12px;
+    min-height: 12px;
+    margin: -6px;
+    border: none;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.4);
+}
+
+/* Volume mute toggle */
+.volume-mute-toggle {
+    background-color: transparent;
+    border: 1px solid @rs_border;
+    color: @rs_fg;
+    padding: 4px 8px;
+    border-radius: 4px;
+}
+.volume-mute-toggle:checked {
+    background-color: @rs_red;
+    color: @rs_bg;
+    border-color: @rs_red;
+}
+
+/* Generic popover dropdowns / lists */
+dropdown {
+    min-height: 0;
+}
+dropdown > button {
+    background-color: @rs_surface;
+    color: @rs_fg;
+    border: 1px solid @rs_border_highlight;
+    border-radius: 4px;
+    padding: 4px 8px;
+}
+
+/* WiFi popover */
+.wifi-popover { min-width: 280px; }
+.wifi-popover-title {
+    color: @rs_fg;
+    font-weight: 700;
+    margin-bottom: 6px;
+}
+.wifi-refresh, .wifi-disconnect {
+    background-color: @rs_surface;
+    color: @rs_fg;
+    border: 1px solid @rs_border_highlight;
+    border-radius: 4px;
+    padding: 4px 10px;
+}
+.wifi-refresh:hover, .wifi-disconnect:hover {
+    background-color: @rs_border_highlight;
+}
+.wifi-list { background-color: transparent; }
+.wifi-list row {
+    background-color: transparent;
+    border-radius: 4px;
+    padding: 6px 8px;
+    color: @rs_fg;
+}
+.wifi-list row:hover {
+    background-color: @rs_surface;
+}
+.wifi-row-known { font-weight: 700; }
+.wifi-row-secured { color: @rs_yellow; }
+.wifi-row-signal { color: @rs_text_dim; min-width: 32px; }
+.wifi-row-connected { background-color: @rs_surface; color: @rs_accent; }
+.wifi-empty { color: @rs_text_dim; padding: 10px; }
+
+/* Bluetooth popover */
+.bluetooth-popover { min-width: 260px; }
+.bluetooth-popover-title {
+    color: @rs_fg;
+    font-weight: 700;
+    margin-bottom: 6px;
+}
+.bluetooth-device-list { background-color: transparent; }
+.bluetooth-device-row {
+    background-color: transparent;
+    color: @rs_fg;
+    padding: 6px 4px;
+    border-radius: 4px;
+}
+.bluetooth-device-row:hover {
+    background-color: @rs_surface;
+}
+.bluetooth-device-connected {
+    color: @rs_accent;
+    font-weight: 700;
+}
+.bluetooth-device-button {
+    background-color: @rs_surface;
+    color: @rs_fg;
+    border: 1px solid @rs_border_highlight;
+    border-radius: 4px;
+    padding: 2px 8px;
+}
+.bluetooth-device-button:hover {
+    background-color: @rs_border_highlight;
+}
+.bluetooth-placeholder {
+    color: @rs_text_dim;
+    padding: 10px;
+}
+
+/* Battery popover */
+.battery-popover { min-width: 200px; }
+.battery-popover-status {
+    color: @rs_fg;
+    font-weight: 700;
+}
+
+/* Switch (used by Bluetooth power toggle) */
+switch {
+    background-color: @rs_surface;
+    border: 1px solid @rs_border_highlight;
+    border-radius: 9999px;
+}
+switch:checked {
+    background-color: @rs_accent;
+    border-color: @rs_accent;
+}
+switch slider {
+    background-color: @rs_fg;
+    border-radius: 50%;
+}
