@@ -33,13 +33,31 @@ impl Component for App {
     type Widgets = ();
 
     fn init_root() -> Self::Root {
-        // Hidden management window — relm4 RelmApp expects a root, but our
-        // bars open their own ApplicationWindows. This window is never shown.
-        gtk::Window::new()
+        // Management window — relm4 RelmApp will call `present()` on this
+        // after init returns. We hide it immediately on realize so it never
+        // appears on screen; the actual UI lives in per-monitor Bar windows
+        // launched below.
+        gtk::Window::builder()
+            .default_width(1)
+            .default_height(1)
+            .decorated(false)
+            .resizable(false)
+            .build()
     }
 
-    fn init(_: Self::Init, _root: Self::Root, sender: ComponentSender<Self>) -> ComponentParts<Self> {
+    fn init(_: Self::Init, root: Self::Root, sender: ComponentSender<Self>) -> ComponentParts<Self> {
         style::load();
+
+        // Suppress the management window. `connect_realize` fires before the
+        // window's surface is mapped, so calling `set_visible(false)` here
+        // prevents it from flashing on screen. We also hide on `connect_show`
+        // as a belt-and-braces guard against compositors that map regardless.
+        root.connect_realize(|w| {
+            w.set_visible(false);
+        });
+        root.connect_show(|w| {
+            w.set_visible(false);
+        });
 
         let display = gdk::Display::default().expect("no default GdkDisplay");
         let monitors = display.monitors();
