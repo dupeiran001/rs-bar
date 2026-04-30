@@ -14,10 +14,10 @@ gpui_platform = { git = "https://github.com/zed-industries/zed", branch = "main"
 
 chrono = "0.4"
 linicon = "2.3"
-niri-ipc = "25.11"
+niri-ipc = "26.4"
 png = "0.17"
 system-tray = "0.8"
-tokio = { version = "1", features = ["rt", "sync"] }
+tokio = { version = "1", features = ["rt", "rt-multi-thread", "sync", "time", "macros", "process"] }
 uuid = "1"
 
 async-channel = "2"
@@ -31,6 +31,15 @@ anyhow = "1.0.102"
 env_logger = "0.11.10"
 log = "0.4.29"
 iced_layershell = "0.17.1"
+
+# Relm4/GTK4 backend (selected at runtime via the `--relm` flag).
+relm4 = "0.10"
+relm4-components = "0.10"
+gtk = { package = "gtk4", version = "0.10", features = ["v4_18"] }
+gtk4-layer-shell = "0.6"
+glib = "0.21"
+gio = "0.21"
+gdk = { package = "gdk4", version = "0.10" }
 
 # Override the git-dep GPUI with our locally-vendored fork so we can patch it.
 # The vendored copy lives in ./vendor/zed and started from the same pinned
