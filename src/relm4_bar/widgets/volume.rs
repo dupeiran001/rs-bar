@@ -27,10 +27,10 @@ use crate::relm4_bar::hub::volume::{SinkInfo, VolumeState};
 
 use super::{NamedWidget, WidgetInit, capsule, set_exclusive_class};
 
-const ICON_HIGH: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/assets/icons/volume-high.svg");
-const ICON_LOW: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/assets/icons/volume-low.svg");
-const ICON_MUTE: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/assets/icons/mute.svg");
-const ICON_UNMUTE: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/assets/icons/unmute.svg");
+const ICON_HIGH: &str = "volume-high-symbolic";
+const ICON_LOW: &str = "volume-low-symbolic";
+const ICON_MUTE: &str = "mute-symbolic";
+const ICON_UNMUTE: &str = "unmute-symbolic";
 
 /// CSS classes for color states. `set_exclusive_class` strips the others
 /// before adding the chosen one, so stale classes can't accumulate.
@@ -40,27 +40,6 @@ const COLOR_CLASSES: &[&str] = &[
     "volume-mid",
     "volume-high",
 ];
-
-fn cached(path: &'static str) -> &'static gdk::Texture {
-    // Tiny per-path texture cache. Each ICON_* constant gets its own static
-    // through this macro-free helper; we identify them by pointer equality
-    // since the &'static strs are unique values produced by `concat!(env!())`.
-    static HIGH: OnceLock<gdk::Texture> = OnceLock::new();
-    static LOW: OnceLock<gdk::Texture> = OnceLock::new();
-    static MUTE: OnceLock<gdk::Texture> = OnceLock::new();
-    static UNMUTE: OnceLock<gdk::Texture> = OnceLock::new();
-
-    let slot = if std::ptr::eq(path, ICON_HIGH) {
-        &HIGH
-    } else if std::ptr::eq(path, ICON_LOW) {
-        &LOW
-    } else if std::ptr::eq(path, ICON_MUTE) {
-        &MUTE
-    } else {
-        &UNMUTE
-    };
-    slot.get_or_init(|| gdk::Texture::from_filename(path).expect("icon load"))
-}
 
 /// Install a process-wide CssProvider once that defines the color classes.
 fn ensure_css() {
@@ -84,7 +63,7 @@ fn ensure_css() {
     });
 }
 
-/// Map a `(percent, muted)` pair to the icon path + CSS class.
+/// Map a `(percent, muted)` pair to the icon name + CSS class.
 fn icon_for(percent: u32, muted: bool) -> (&'static str, &'static str) {
     if muted {
         (ICON_MUTE, "volume-muted")
@@ -141,7 +120,7 @@ impl SimpleComponent for Volume {
             set_valign: gtk::Align::Center,
             #[name = "icon"]
             gtk::Image {
-                set_paintable: Some(cached(ICON_UNMUTE)),
+                set_icon_name: Some(ICON_UNMUTE),
                 set_pixel_size: config::ICON_SIZE() as i32,
             },
             #[name = "label"]
@@ -307,9 +286,9 @@ impl SimpleComponent for Volume {
             VolumeMsg::Update(new) => {
                 // Coalescing: skip GTK writes when nothing visible changed.
                 let icon_changed = {
-                    let (path_old, _) = icon_for(self.state.percent, self.state.muted);
-                    let (path_new, _) = icon_for(new.percent, new.muted);
-                    !std::ptr::eq(path_old, path_new)
+                    let (name_old, _) = icon_for(self.state.percent, self.state.muted);
+                    let (name_new, _) = icon_for(new.percent, new.muted);
+                    !std::ptr::eq(name_old, name_new)
                 };
                 let pct_changed = self.state.percent != new.percent;
                 let muted_changed = self.state.muted != new.muted;
@@ -331,8 +310,8 @@ impl SimpleComponent for Volume {
                 *self.suppress_signals.borrow_mut() = true;
 
                 if icon_changed || muted_changed || pct_changed {
-                    let (path, class) = icon_for(new.percent, new.muted);
-                    self.icon.set_paintable(Some(cached(path)));
+                    let (name, class) = icon_for(new.percent, new.muted);
+                    self.icon.set_icon_name(Some(name));
                     set_exclusive_class(&self.icon, class, COLOR_CLASSES);
                     set_exclusive_class(&self.label, class, COLOR_CLASSES);
                     self.label.set_label(&format!("{:>3}%", new.percent.min(999)));

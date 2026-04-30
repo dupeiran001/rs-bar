@@ -15,7 +15,6 @@
 
 use std::cell::RefCell;
 use std::rc::Rc;
-use std::sync::OnceLock;
 
 use gtk::prelude::*;
 use relm4::prelude::*;
@@ -26,14 +25,13 @@ use crate::relm4_bar::hub::wifi::{KnownNetwork, WifiState};
 
 use super::{NamedWidget, WidgetInit, capsule, set_exclusive_class};
 
-// ── icon paths (one per signal band) ────────────────────────────────────
+// ── symbolic icon names (one per signal band) ───────────────────────────
 
-const WIFI_OFF: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/assets/icons/wifi-off.svg");
-const WIFI_WEAK: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/assets/icons/wifi-weak.svg");
-const WIFI_FAIR: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/assets/icons/wifi-fair.svg");
-const WIFI_GOOD: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/assets/icons/wifi-good.svg");
-const WIFI_EXCELLENT: &str =
-    concat!(env!("CARGO_MANIFEST_DIR"), "/assets/icons/wifi-excellent.svg");
+const WIFI_OFF: &str = "wifi-off-symbolic";
+const WIFI_WEAK: &str = "wifi-weak-symbolic";
+const WIFI_FAIR: &str = "wifi-fair-symbolic";
+const WIFI_GOOD: &str = "wifi-good-symbolic";
+const WIFI_EXCELLENT: &str = "wifi-excellent-symbolic";
 
 /// CSS classes for the four signal/state colour bands. `set_exclusive_class`
 /// strips the others before adding the chosen one, so stale classes can't
@@ -43,37 +41,6 @@ const COLOR_CLASSES: &[&str] = &["wifi-disconnected", "wifi-low", "wifi-mid", "w
 /// Maximum visible characters of the SSID in the bar (popover always shows
 /// the full name). Mirrors rs-bar's compact bar layout.
 const SSID_BAR_MAX: usize = 16;
-
-fn cached_texture(path: &'static str) -> &'static gdk::Texture {
-    fn load(p: &str) -> gdk::Texture {
-        gdk::Texture::from_filename(p).expect("wifi icon load")
-    }
-    // One static slot per path; keyed via a tiny match so `OnceLock`s aren't
-    // generic over the path string.
-    match path {
-        WIFI_OFF => {
-            static T: OnceLock<gdk::Texture> = OnceLock::new();
-            T.get_or_init(|| load(WIFI_OFF))
-        }
-        WIFI_WEAK => {
-            static T: OnceLock<gdk::Texture> = OnceLock::new();
-            T.get_or_init(|| load(WIFI_WEAK))
-        }
-        WIFI_FAIR => {
-            static T: OnceLock<gdk::Texture> = OnceLock::new();
-            T.get_or_init(|| load(WIFI_FAIR))
-        }
-        WIFI_GOOD => {
-            static T: OnceLock<gdk::Texture> = OnceLock::new();
-            T.get_or_init(|| load(WIFI_GOOD))
-        }
-        WIFI_EXCELLENT => {
-            static T: OnceLock<gdk::Texture> = OnceLock::new();
-            T.get_or_init(|| load(WIFI_EXCELLENT))
-        }
-        _ => unreachable!(),
-    }
-}
 
 /// Choose the bar icon for the current state. Same thresholds as rs-bar's
 /// GPUI version: 80/60/40/20 percent (else off).
@@ -178,7 +145,7 @@ impl SimpleComponent for Wifi {
             set_valign: gtk::Align::Center,
             #[name = "icon"]
             gtk::Image {
-                set_paintable: Some(cached_texture(WIFI_OFF)),
+                set_icon_name: Some(WIFI_OFF),
                 set_pixel_size: config::ICON_SIZE() as i32,
             },
             #[name = "ssid_label"]
@@ -297,8 +264,8 @@ impl SimpleComponent for Wifi {
                 let bar_changed = !bar_render_eq(&self.state, &new);
 
                 if bar_changed {
-                    let icon_path = icon_for(&new);
-                    self.icon.set_paintable(Some(cached_texture(icon_path)));
+                    let icon_name = icon_for(&new);
+                    self.icon.set_icon_name(Some(icon_name));
 
                     let class = class_for(&new);
                     set_exclusive_class(&self.icon, class, COLOR_CLASSES);
@@ -397,7 +364,7 @@ fn make_row(
     }
 
     // Signal icon.
-    let icon = gtk::Image::from_paintable(Some(cached_texture(icon_for_signal(net.signal))));
+    let icon = gtk::Image::from_icon_name(icon_for_signal(net.signal));
     icon.set_pixel_size(config::ICON_SIZE() as i32);
     row.append(&icon);
 

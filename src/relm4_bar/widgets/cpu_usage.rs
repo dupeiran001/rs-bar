@@ -24,8 +24,6 @@
 //! 7. **`impl NamedWidget`** with `const NAME` so the framework can refer to
 //!    the widget.
 
-use std::sync::OnceLock;
-
 use gtk::prelude::*;
 use relm4::prelude::*;
 
@@ -34,7 +32,10 @@ use crate::relm4_bar::hub;
 
 use super::{NamedWidget, WidgetInit, capsule, set_exclusive_class};
 
-const ICON_PATH: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/assets/icons/cpu-usage.svg");
+/// Symbolic icon name registered in the GTK IconTheme. The SVG is loaded
+/// from `assets/icons/cpu-usage-symbolic.svg`, which uses `fill="currentColor"`
+/// so the GTK style cascade can recolor it at render time.
+const ICON_NAME: &str = "cpu-usage-symbolic";
 
 /// CSS classes for color bands. `set_exclusive_class` strips the others
 /// before adding the chosen one, so stale classes can't accumulate.
@@ -44,14 +45,6 @@ const COLOR_CLASSES: &[&str] = &[
     "cpu-usage-norm",
     "cpu-usage-dim",
 ];
-
-/// Parse the SVG icon once and reuse the resulting `gdk::Texture` across
-/// every bar instance. The path is hard-coded with `concat!(env!(…))`, so a
-/// missing icon is a build-time problem and `expect` here is acceptable.
-fn cached_texture() -> &'static gdk::Texture {
-    static T: OnceLock<gdk::Texture> = OnceLock::new();
-    T.get_or_init(|| gdk::Texture::from_filename(ICON_PATH).expect("icon load"))
-}
 
 pub struct CpuUsage {
     /// Last-seen usage as a float, kept for the displayed-value coalescing
@@ -82,7 +75,7 @@ impl SimpleComponent for CpuUsage {
             set_valign: gtk::Align::Center,
             #[name = "icon"]
             gtk::Image {
-                set_paintable: Some(cached_texture()),
+                set_icon_name: Some(ICON_NAME),
                 set_pixel_size: config::ICON_SIZE() as i32,
             },
             #[name = "label"]

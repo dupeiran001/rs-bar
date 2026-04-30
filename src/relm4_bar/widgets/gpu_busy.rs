@@ -15,8 +15,6 @@
 //! `set_visible(false)`. This matches rs-bar's behaviour of rendering an
 //! empty capsule (effectively invisible) when the source is absent.
 
-use std::sync::OnceLock;
-
 use gtk::prelude::*;
 use relm4::prelude::*;
 
@@ -25,11 +23,6 @@ use crate::relm4_bar::hub;
 use crate::relm4_bar::hub::gpu_busy::{GpuBusySample, GpuVendor};
 
 use super::{NamedWidget, WidgetInit, capsule, set_exclusive_class};
-
-const ICON_AMD: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/assets/icons/amd-radeon.svg");
-const ICON_INTEL: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/assets/icons/intel-arc-gpu.svg");
-const ICON_NVIDIA: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/assets/icons/nvidia-gpu.svg");
-const ICON_GENERIC: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/assets/icons/gpu-busy.svg");
 
 /// CSS classes for color bands. `set_exclusive_class` strips the others
 /// before adding the chosen one.
@@ -40,29 +33,14 @@ const COLOR_CLASSES: &[&str] = &[
     "gpu-busy-dim",
 ];
 
-/// Cache one `gdk::Texture` per vendor. The first call parses the SVG; later
-/// calls (including across other bar instances) get the cached texture.
-fn vendor_texture(vendor: GpuVendor) -> &'static gdk::Texture {
-    fn load(path: &str) -> gdk::Texture {
-        gdk::Texture::from_filename(path).expect("icon load")
-    }
+/// Map a vendor to its symbolic icon name (registered via the IconTheme
+/// search path; SVGs use `fill="currentColor"` for live recoloring).
+fn vendor_icon_name(vendor: GpuVendor) -> &'static str {
     match vendor {
-        GpuVendor::Amd => {
-            static T: OnceLock<gdk::Texture> = OnceLock::new();
-            T.get_or_init(|| load(ICON_AMD))
-        }
-        GpuVendor::Intel => {
-            static T: OnceLock<gdk::Texture> = OnceLock::new();
-            T.get_or_init(|| load(ICON_INTEL))
-        }
-        GpuVendor::Nvidia => {
-            static T: OnceLock<gdk::Texture> = OnceLock::new();
-            T.get_or_init(|| load(ICON_NVIDIA))
-        }
-        GpuVendor::Unknown => {
-            static T: OnceLock<gdk::Texture> = OnceLock::new();
-            T.get_or_init(|| load(ICON_GENERIC))
-        }
+        GpuVendor::Amd => "amd-radeon-symbolic",
+        GpuVendor::Intel => "intel-arc-gpu-symbolic",
+        GpuVendor::Nvidia => "nvidia-gpu-symbolic",
+        GpuVendor::Unknown => "gpu-busy-symbolic",
     }
 }
 
@@ -96,7 +74,7 @@ impl SimpleComponent for GpuBusy {
             set_visible: false,
             #[name = "icon"]
             gtk::Image {
-                set_paintable: Some(vendor_texture(GpuVendor::Unknown)),
+                set_icon_name: Some(vendor_icon_name(GpuVendor::Unknown)),
                 set_pixel_size: config::ICON_SIZE() as i32,
             },
             #[name = "label"]
@@ -159,7 +137,7 @@ impl SimpleComponent for GpuBusy {
                 }
 
                 if vendor != self.vendor {
-                    self.icon.set_paintable(Some(vendor_texture(vendor)));
+                    self.icon.set_icon_name(Some(vendor_icon_name(vendor)));
                     self.vendor = vendor;
                 }
                 self.pct = busy_pct;

@@ -1,8 +1,6 @@
 //! Power widget. Static icon button that runs `config::POWER_COMMAND()` on
 //! click. No subscription, no hub, no popover.
 
-use std::sync::OnceLock;
-
 use gtk::prelude::*;
 use relm4::prelude::*;
 
@@ -10,12 +8,10 @@ use crate::relm4_bar::config;
 
 use super::{NamedWidget, WidgetInit, capsule};
 
-/// Parse the configured icon path once and reuse the resulting `gdk::Texture`
-/// across every bar instance.
-fn cached_texture() -> &'static gdk::Texture {
-    static T: OnceLock<gdk::Texture> = OnceLock::new();
-    T.get_or_init(|| gdk::Texture::from_filename(config::POWER_ICON()).expect("power icon load"))
-}
+/// Symbolic icon name registered via the IconTheme search path. The
+/// `power-symbolic.svg` copy uses `fill="currentColor"` so it picks up the
+/// `.power-button` text color (red, by theme default).
+const ICON_NAME: &str = "power-symbolic";
 
 #[allow(dead_code)]
 pub struct Power {
@@ -37,7 +33,7 @@ impl SimpleComponent for Power {
             set_valign: gtk::Align::Center,
             add_css_class: "power-button",
             gtk::Image {
-                set_paintable: Some(cached_texture()),
+                set_icon_name: Some(ICON_NAME),
                 set_pixel_size: config::ICON_SIZE() as i32,
             },
         }

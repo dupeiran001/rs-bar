@@ -6,8 +6,6 @@
 //! receiver is bridged into component messages on the GTK main context, and
 //! `update` short-circuits when the displayed value is unchanged.
 
-use std::sync::OnceLock;
-
 use gtk::prelude::*;
 use relm4::prelude::*;
 
@@ -16,19 +14,11 @@ use crate::relm4_bar::hub;
 
 use super::{NamedWidget, WidgetInit, capsule, set_exclusive_class};
 
-const ICON_PATH: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/assets/icons/thermometer.svg");
+const ICON_NAME: &str = "thermometer-symbolic";
 
 /// CSS classes for color bands. `set_exclusive_class` strips the others
 /// before adding the chosen one, so stale classes can't accumulate.
 const COLOR_CLASSES: &[&str] = &["cpu-temp-hot", "cpu-temp-warm", "cpu-temp-cool"];
-
-/// Parse the SVG icon once and reuse the resulting `gdk::Texture` across
-/// every bar instance. The path is hard-coded with `concat!(env!(…))`, so a
-/// missing icon is a build-time problem and `expect` here is acceptable.
-fn cached_texture() -> &'static gdk::Texture {
-    static T: OnceLock<gdk::Texture> = OnceLock::new();
-    T.get_or_init(|| gdk::Texture::from_filename(ICON_PATH).expect("icon load"))
-}
 
 pub struct CpuTemp {
     /// Last-seen temperature in degrees C, kept for the displayed-value
@@ -59,7 +49,7 @@ impl SimpleComponent for CpuTemp {
             set_valign: gtk::Align::Center,
             #[name = "icon"]
             gtk::Image {
-                set_paintable: Some(cached_texture()),
+                set_icon_name: Some(ICON_NAME),
                 set_pixel_size: config::ICON_SIZE() as i32,
             },
             #[name = "label"]

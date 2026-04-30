@@ -21,22 +21,12 @@ use crate::relm4_bar::hub;
 
 use super::{NamedWidget, WidgetInit, capsule, set_exclusive_class};
 
-const ICON_ON_PATH: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/assets/icons/vpn-on.svg");
-const ICON_OFF_PATH: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/assets/icons/vpn-off.svg");
+const ICON_ON: &str = "vpn-on-symbolic";
+const ICON_OFF: &str = "vpn-off-symbolic";
 
 /// CSS classes for on/off color states. `set_exclusive_class` strips the
 /// other before adding the chosen one, so stale classes can't accumulate.
 const COLOR_CLASSES: &[&str] = &["wireguard-on", "wireguard-off"];
-
-fn cached_icon_on() -> &'static gdk::Texture {
-    static T: OnceLock<gdk::Texture> = OnceLock::new();
-    T.get_or_init(|| gdk::Texture::from_filename(ICON_ON_PATH).expect("icon load"))
-}
-
-fn cached_icon_off() -> &'static gdk::Texture {
-    static T: OnceLock<gdk::Texture> = OnceLock::new();
-    T.get_or_init(|| gdk::Texture::from_filename(ICON_OFF_PATH).expect("icon load"))
-}
 
 /// Install a process-wide CssProvider once that defines the on/off color
 /// classes. Mounted at `STYLE_PROVIDER_PRIORITY_APPLICATION + 1` so it sits
@@ -89,7 +79,7 @@ impl SimpleComponent for Wireguard {
             set_valign: gtk::Align::Center,
             #[name = "icon"]
             gtk::Image {
-                set_paintable: Some(cached_icon_off()),
+                set_icon_name: Some(ICON_OFF),
                 set_pixel_size: config::ICON_SIZE() as i32,
             },
         }
@@ -152,12 +142,12 @@ impl SimpleComponent for Wireguard {
                     return;
                 }
                 self.active = active;
-                let (tex, class) = if active {
-                    (cached_icon_on(), "wireguard-on")
+                let (name, class) = if active {
+                    (ICON_ON, "wireguard-on")
                 } else {
-                    (cached_icon_off(), "wireguard-off")
+                    (ICON_OFF, "wireguard-off")
                 };
-                self.icon.set_paintable(Some(tex));
+                self.icon.set_icon_name(Some(name));
                 set_exclusive_class(&self.icon, class, COLOR_CLASSES);
             }
             WireguardMsg::Click => {

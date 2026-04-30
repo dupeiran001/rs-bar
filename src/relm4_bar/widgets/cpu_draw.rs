@@ -17,7 +17,6 @@
 //! absent source.
 
 use std::path::Path;
-use std::sync::OnceLock;
 
 use gtk::prelude::*;
 use relm4::prelude::*;
@@ -26,10 +25,6 @@ use crate::relm4_bar::config;
 use crate::relm4_bar::hub;
 
 use super::{NamedWidget, WidgetInit, capsule, set_exclusive_class};
-
-const ICON_AMD: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/assets/icons/amd-cpu.svg");
-const ICON_INTEL: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/assets/icons/intel-cpu.svg");
-const ICON_APPLE: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/assets/icons/apple-chip.svg");
 
 /// CSS classes for color bands. `set_exclusive_class` strips the others
 /// before adding the chosen one, so stale classes can't accumulate.
@@ -67,26 +62,14 @@ fn detect_cpu_vendor() -> CpuVendor {
     CpuVendor::Unknown
 }
 
-/// Cache one `gdk::Texture` per known vendor. The first call parses the
-/// SVG; later calls (including across other bar instances) reuse the
-/// cached texture. `Unknown` returns `None` so the icon can be hidden.
-fn vendor_texture(vendor: CpuVendor) -> Option<&'static gdk::Texture> {
-    fn load(path: &str) -> gdk::Texture {
-        gdk::Texture::from_filename(path).expect("icon load")
-    }
+/// Map a CPU vendor to its symbolic icon name (registered via the IconTheme
+/// search path; SVGs use `fill="currentColor"` for live recoloring).
+/// `Unknown` returns `None` so the icon can be hidden.
+fn vendor_icon_name(vendor: CpuVendor) -> Option<&'static str> {
     match vendor {
-        CpuVendor::Amd => {
-            static T: OnceLock<gdk::Texture> = OnceLock::new();
-            Some(T.get_or_init(|| load(ICON_AMD)))
-        }
-        CpuVendor::Intel => {
-            static T: OnceLock<gdk::Texture> = OnceLock::new();
-            Some(T.get_or_init(|| load(ICON_INTEL)))
-        }
-        CpuVendor::Apple => {
-            static T: OnceLock<gdk::Texture> = OnceLock::new();
-            Some(T.get_or_init(|| load(ICON_APPLE)))
-        }
+        CpuVendor::Amd => Some("amd-cpu-symbolic"),
+        CpuVendor::Intel => Some("intel-cpu-symbolic"),
+        CpuVendor::Apple => Some("apple-chip-symbolic"),
         CpuVendor::Unknown => None,
     }
 }
@@ -143,8 +126,8 @@ impl SimpleComponent for CpuDraw {
 
         // Vendor never changes at runtime — resolve once and apply.
         let vendor = detect_cpu_vendor();
-        if let Some(tex) = vendor_texture(vendor) {
-            widgets.icon.set_paintable(Some(tex));
+        if let Some(name) = vendor_icon_name(vendor) {
+            widgets.icon.set_icon_name(Some(name));
         } else {
             widgets.icon.set_visible(false);
         }

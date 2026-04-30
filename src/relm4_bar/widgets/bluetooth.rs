@@ -4,7 +4,6 @@
 
 use std::cell::RefCell;
 use std::rc::Rc;
-use std::sync::OnceLock;
 
 use gtk::prelude::*;
 use relm4::prelude::*;
@@ -15,10 +14,9 @@ use crate::relm4_bar::hub::bluetooth::{BluetoothState, DeviceInfo};
 
 use super::{NamedWidget, WidgetInit, capsule, set_exclusive_class};
 
-const ICON_OFF: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/assets/icons/bluetooth-off.svg");
-const ICON_ON: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/assets/icons/bluetooth-on.svg");
-const ICON_CONNECTED: &str =
-    concat!(env!("CARGO_MANIFEST_DIR"), "/assets/icons/bluetooth-connected.svg");
+const ICON_OFF: &str = "bluetooth-off-symbolic";
+const ICON_ON: &str = "bluetooth-on-symbolic";
+const ICON_CONNECTED: &str = "bluetooth-connected-symbolic";
 
 /// CSS classes mirroring the three states; `set_exclusive_class` swaps between
 /// them so a stale class can't accumulate.
@@ -49,23 +47,13 @@ impl BtIconState {
             BtIconState::Connected => "bluetooth-connected",
         }
     }
-}
 
-/// Cache the three SVG textures once per process.
-fn cached_texture(state: BtIconState) -> &'static gdk::Texture {
-    static OFF: OnceLock<gdk::Texture> = OnceLock::new();
-    static ON: OnceLock<gdk::Texture> = OnceLock::new();
-    static CONN: OnceLock<gdk::Texture> = OnceLock::new();
-    match state {
-        BtIconState::Off => OFF.get_or_init(|| {
-            gdk::Texture::from_filename(ICON_OFF).expect("bluetooth-off icon load")
-        }),
-        BtIconState::On => ON.get_or_init(|| {
-            gdk::Texture::from_filename(ICON_ON).expect("bluetooth-on icon load")
-        }),
-        BtIconState::Connected => CONN.get_or_init(|| {
-            gdk::Texture::from_filename(ICON_CONNECTED).expect("bluetooth-connected icon load")
-        }),
+    fn icon_name(self) -> &'static str {
+        match self {
+            BtIconState::Off => ICON_OFF,
+            BtIconState::On => ICON_ON,
+            BtIconState::Connected => ICON_CONNECTED,
+        }
     }
 }
 
@@ -103,7 +91,7 @@ impl SimpleComponent for Bluetooth {
             set_valign: gtk::Align::Center,
             #[name = "icon"]
             gtk::Image {
-                set_paintable: Some(cached_texture(BtIconState::Off)),
+                set_icon_name: Some(BtIconState::Off.icon_name()),
                 set_pixel_size: config::ICON_SIZE() as i32,
             },
         }
@@ -207,7 +195,7 @@ impl SimpleComponent for Bluetooth {
                 let new_icon_state = BtIconState::from_state(&state);
                 if new_icon_state != self.icon_state {
                     self.icon_state = new_icon_state;
-                    self.icon.set_paintable(Some(cached_texture(new_icon_state)));
+                    self.icon.set_icon_name(Some(new_icon_state.icon_name()));
                     set_exclusive_class(&self.icon, new_icon_state.class(), STATE_CLASSES);
                 }
 

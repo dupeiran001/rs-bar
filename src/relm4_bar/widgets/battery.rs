@@ -30,11 +30,11 @@ use crate::relm4_bar::hub::battery::{BatteryState, BatteryStatus};
 
 use super::{NamedWidget, WidgetInit, capsule, set_exclusive_class};
 
-const ICON_BATTERY: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/assets/icons/battery.svg");
-const ICON_CHARGING: &str = concat!(
-    env!("CARGO_MANIFEST_DIR"),
-    "/assets/icons/battery-charging.svg"
-);
+/// Symbolic icon names registered via the IconTheme search path. The
+/// `*-symbolic.svg` files use `fill="currentColor"` so they recolor with
+/// the widget's text color.
+const ICON_BATTERY: &str = "battery-symbolic";
+const ICON_CHARGING: &str = "battery-charging-symbolic";
 
 /// CSS classes for battery color bands. `set_exclusive_class` strips the
 /// others before adding the chosen one, so stale classes can't accumulate.
@@ -46,16 +46,9 @@ const COLOR_CLASSES: &[&str] = &[
     "battery-full",
 ];
 
-/// Cache the discharging/charging textures so the icon swap on plug-in is
-/// just a `set_paintable` call rather than a re-decode of the SVG.
-fn cached_texture(charging: bool) -> &'static gdk::Texture {
-    static T_BAT: OnceLock<gdk::Texture> = OnceLock::new();
-    static T_CHG: OnceLock<gdk::Texture> = OnceLock::new();
-    if charging {
-        T_CHG.get_or_init(|| gdk::Texture::from_filename(ICON_CHARGING).expect("icon load"))
-    } else {
-        T_BAT.get_or_init(|| gdk::Texture::from_filename(ICON_BATTERY).expect("icon load"))
-    }
+/// Pick the icon name for the given charging state.
+fn icon_name(charging: bool) -> &'static str {
+    if charging { ICON_CHARGING } else { ICON_BATTERY }
 }
 
 /// Install a process-wide CssProvider once that defines the battery color
@@ -169,7 +162,7 @@ impl SimpleComponent for Battery {
             set_visible: false,
             #[name = "icon"]
             gtk::Image {
-                set_paintable: Some(cached_texture(false)),
+                set_icon_name: Some(icon_name(false)),
                 set_pixel_size: config::ICON_SIZE() as i32,
             },
             #[name = "label"]
@@ -271,7 +264,7 @@ impl SimpleComponent for Battery {
                 let charging = matches!(state.status, BatteryStatus::Charging);
                 let was_charging = matches!(self.last.status, BatteryStatus::Charging);
                 if charging != was_charging || !self.last.present {
-                    self.icon.set_paintable(Some(cached_texture(charging)));
+                    self.icon.set_icon_name(Some(icon_name(charging)));
                 }
                 if state.capacity_pct != self.last.capacity_pct || !self.last.present {
                     self.label.set_label(&format!("{}%", state.capacity_pct));

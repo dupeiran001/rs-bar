@@ -6,8 +6,6 @@
 //! by `set_visible`, and the icon carries the `capslock-active` CSS class
 //! while shown so themes can recolour it.
 
-use std::sync::OnceLock;
-
 use gtk::prelude::*;
 use relm4::prelude::*;
 
@@ -16,14 +14,7 @@ use crate::relm4_bar::hub;
 
 use super::{NamedWidget, WidgetInit, capsule};
 
-const ICON_PATH: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/assets/icons/capslock.svg");
-
-/// Parse the SVG icon once and reuse the resulting `gdk::Texture` across
-/// every bar instance.
-fn cached_texture() -> &'static gdk::Texture {
-    static T: OnceLock<gdk::Texture> = OnceLock::new();
-    T.get_or_init(|| gdk::Texture::from_filename(ICON_PATH).expect("icon load"))
-}
+const ICON_NAME: &str = "capslock-symbolic";
 
 pub struct CapsLock {
     /// Last-seen state, kept for the displayed-value coalescing check.
@@ -51,7 +42,7 @@ impl SimpleComponent for CapsLock {
             set_visible: false,
             #[name = "icon"]
             gtk::Image {
-                set_paintable: Some(cached_texture()),
+                set_icon_name: Some(ICON_NAME),
                 set_pixel_size: config::ICON_SIZE() as i32,
                 add_css_class: "capslock-active",
             },

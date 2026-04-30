@@ -79,4 +79,10 @@ pub fn load() {
         &provider,
         gtk::STYLE_PROVIDER_PRIORITY_APPLICATION,
     );
+
+    // Register our SVG icon directory so widgets can use Image::from_icon_name.
+    // Symbolic-icon recoloring works with these because the *-symbolic.svg
+    // copies use fill="currentColor".
+    let icon_theme = gtk::IconTheme::for_display(&display);
+    icon_theme.add_search_path(concat!(env!("CARGO_MANIFEST_DIR"), "/assets/icons"));
 }

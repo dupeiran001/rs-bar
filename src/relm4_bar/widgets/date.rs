@@ -6,7 +6,6 @@
 //! profile (matches rs-bar). Drop the attribute once a profile uses it.
 #![allow(dead_code)]
 
-use std::sync::OnceLock;
 use std::time::Duration;
 
 use chrono::Local;
@@ -17,14 +16,7 @@ use crate::relm4_bar::config;
 
 use super::{NamedWidget, WidgetInit, capsule};
 
-const ICON_PATH: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/assets/icons/calendar.svg");
-
-/// Parse the SVG icon once and reuse the resulting `gdk::Texture` across
-/// every bar instance.
-fn cached_texture() -> &'static gdk::Texture {
-    static T: OnceLock<gdk::Texture> = OnceLock::new();
-    T.get_or_init(|| gdk::Texture::from_filename(ICON_PATH).expect("icon load"))
-}
+const ICON_NAME: &str = "calendar-symbolic";
 
 fn format_date() -> String { Local::now().format("%m-%d").to_string() }
 
@@ -53,7 +45,7 @@ impl SimpleComponent for Date {
             set_spacing: 4,
             set_valign: gtk::Align::Center,
             gtk::Image {
-                set_paintable: Some(cached_texture()),
+                set_icon_name: Some(ICON_NAME),
                 set_pixel_size: config::ICON_SIZE() as i32,
             },
             #[name = "label"]

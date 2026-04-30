@@ -10,7 +10,6 @@
 
 use std::cell::RefCell;
 use std::rc::Rc;
-use std::sync::OnceLock;
 
 use gtk::prelude::*;
 use relm4::prelude::*;
@@ -20,21 +19,14 @@ use crate::relm4_bar::hub;
 
 use super::{NamedWidget, WidgetInit, capsule, set_exclusive_class};
 
-const ICON_HIGH: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/assets/icons/brightness-high.svg");
-const ICON_LOW: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/assets/icons/brightness-low.svg");
+const ICON_HIGH: &str = "brightness-high-symbolic";
+const ICON_LOW: &str = "brightness-low-symbolic";
 
 /// CSS classes toggled on the icon (and the matching label) so themes can
 /// style the two states differently.
 const COLOR_CLASSES: &[&str] = &["brightness-low", "brightness-high"];
 
-fn cached(path: &'static str) -> &'static gdk::Texture {
-    static HIGH: OnceLock<gdk::Texture> = OnceLock::new();
-    static LOW: OnceLock<gdk::Texture> = OnceLock::new();
-    let slot = if std::ptr::eq(path, ICON_HIGH) { &HIGH } else { &LOW };
-    slot.get_or_init(|| gdk::Texture::from_filename(path).expect("icon load"))
-}
-
-/// Map a percent value to the icon path + CSS class.
+/// Map a percent value to the icon name + CSS class.
 fn icon_for(percent: u32) -> (&'static str, &'static str) {
     if percent < 50 {
         (ICON_LOW, "brightness-low")
@@ -77,7 +69,7 @@ impl SimpleComponent for Brightness {
             set_valign: gtk::Align::Center,
             #[name = "icon"]
             gtk::Image {
-                set_paintable: Some(cached(ICON_LOW)),
+                set_icon_name: Some(ICON_LOW),
                 set_pixel_size: config::ICON_SIZE() as i32,
             },
             #[name = "label"]
@@ -204,9 +196,9 @@ impl SimpleComponent for Brightness {
             BrightnessMsg::Update(new) => {
                 let new = new.min(100);
                 let icon_changed = {
-                    let (path_old, _) = icon_for(self.percent.min(100));
-                    let (path_new, _) = icon_for(new);
-                    !std::ptr::eq(path_old, path_new)
+                    let (name_old, _) = icon_for(self.percent.min(100));
+                    let (name_new, _) = icon_for(new);
+                    !std::ptr::eq(name_old, name_new)
                 };
                 let pct_changed = self.percent != new;
                 if !icon_changed && !pct_changed {
@@ -219,8 +211,8 @@ impl SimpleComponent for Brightness {
                 *self.suppress_signals.borrow_mut() = true;
 
                 if icon_changed || pct_changed {
-                    let (path, class) = icon_for(new);
-                    self.icon.set_paintable(Some(cached(path)));
+                    let (name, class) = icon_for(new);
+                    self.icon.set_icon_name(Some(name));
                     set_exclusive_class(&self.icon, class, COLOR_CLASSES);
                     set_exclusive_class(&self.label, class, COLOR_CLASSES);
                     self.label.set_label(&format!("{:>3}%", new));

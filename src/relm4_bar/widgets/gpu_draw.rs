@@ -24,10 +24,6 @@ use crate::relm4_bar::hub;
 
 use super::{NamedWidget, WidgetInit, capsule, set_exclusive_class};
 
-const ICON_AMD: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/assets/icons/amd-radeon.svg");
-const ICON_NVIDIA: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/assets/icons/nvidia-gpu.svg");
-const ICON_INTEL: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/assets/icons/intel-arc-gpu.svg");
-
 /// CSS classes for color bands. `set_exclusive_class` strips the others
 /// before adding the chosen one, so stale classes can't accumulate.
 const COLOR_CLASSES: &[&str] = &[
@@ -80,22 +76,13 @@ fn detect_vendor() -> Option<GpuVendor> {
     })
 }
 
-/// Per-vendor texture cache. Each vendor gets its own `OnceLock` so the SVG
-/// is parsed at most once per process and shared across every bar instance.
-fn vendor_texture(v: GpuVendor) -> &'static gdk::Texture {
-    static AMD: OnceLock<gdk::Texture> = OnceLock::new();
-    static NVIDIA: OnceLock<gdk::Texture> = OnceLock::new();
-    static INTEL: OnceLock<gdk::Texture> = OnceLock::new();
+/// Map a GPU vendor to its symbolic icon name (registered via the IconTheme
+/// search path; SVGs use `fill="currentColor"` for live recoloring).
+fn vendor_icon_name(v: GpuVendor) -> &'static str {
     match v {
-        GpuVendor::Amd => AMD.get_or_init(|| {
-            gdk::Texture::from_filename(ICON_AMD).expect("amd-radeon.svg load")
-        }),
-        GpuVendor::Nvidia => NVIDIA.get_or_init(|| {
-            gdk::Texture::from_filename(ICON_NVIDIA).expect("nvidia-gpu.svg load")
-        }),
-        GpuVendor::Intel => INTEL.get_or_init(|| {
-            gdk::Texture::from_filename(ICON_INTEL).expect("intel-arc-gpu.svg load")
-        }),
+        GpuVendor::Amd => "amd-radeon-symbolic",
+        GpuVendor::Nvidia => "nvidia-gpu-symbolic",
+        GpuVendor::Intel => "intel-arc-gpu-symbolic",
     }
 }
 
@@ -158,10 +145,10 @@ impl SimpleComponent for GpuDraw {
     ) -> ComponentParts<Self> {
         let widgets = view_output!();
 
-        // Pre-load the texture for the detected vendor so the icon is ready
+        // Pre-set the icon for the detected vendor so it's ready
         // the moment the first reading arrives.
         if let Some(v) = detect_vendor() {
-            widgets.icon.set_paintable(Some(vendor_texture(v)));
+            widgets.icon.set_icon_name(Some(vendor_icon_name(v)));
         }
 
         let model = GpuDraw {
@@ -209,11 +196,10 @@ impl SimpleComponent for GpuDraw {
                 self.last_q = Some(q);
 
                 if !self.root.is_visible() {
-                    // Belt-and-braces: re-apply the texture in case vendor
-                    // detection won the race vs first sample. Cheap because
-                    // the texture is cached.
+                    // Belt-and-braces: re-apply the icon name in case vendor
+                    // detection won the race vs first sample.
                     if let Some(v) = detect_vendor() {
-                        self.icon.set_paintable(Some(vendor_texture(v)));
+                        self.icon.set_icon_name(Some(vendor_icon_name(v)));
                     }
                     self.root.set_visible(true);
                 }

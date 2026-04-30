@@ -5,8 +5,6 @@
 //! with the small twist that there are two cached SVG textures rather than
 //! one — the icon swaps based on whether the count is zero.
 
-use std::sync::OnceLock;
-
 use gtk::prelude::*;
 use relm4::prelude::*;
 
@@ -15,29 +13,12 @@ use crate::relm4_bar::hub;
 
 use super::{NamedWidget, WidgetInit, capsule, set_exclusive_class};
 
-const ICON_OK_PATH: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/assets/icons/pkg-uptodate.svg");
-const ICON_PENDING_PATH: &str =
-    concat!(env!("CARGO_MANIFEST_DIR"), "/assets/icons/pkg-updates.svg");
+const ICON_OK: &str = "pkg-uptodate-symbolic";
+const ICON_PENDING: &str = "pkg-updates-symbolic";
 
 /// CSS classes for the two states. `set_exclusive_class` strips the other
 /// before adding the chosen one.
 const STATE_CLASSES: &[&str] = &["pkg-update-pending", "pkg-update-ok"];
-
-/// Parse the "all up to date" SVG icon once and reuse the resulting
-/// `gdk::Texture` across every bar instance. The path is hard-coded with
-/// `concat!(env!(…))`, so a missing icon is a build-time problem and `expect`
-/// here is acceptable.
-fn cached_uptodate_texture() -> &'static gdk::Texture {
-    static T: OnceLock<gdk::Texture> = OnceLock::new();
-    T.get_or_init(|| gdk::Texture::from_filename(ICON_OK_PATH).expect("icon load"))
-}
-
-/// Parse the "updates pending" SVG icon once and reuse the resulting
-/// `gdk::Texture` across every bar instance.
-fn cached_pending_texture() -> &'static gdk::Texture {
-    static T: OnceLock<gdk::Texture> = OnceLock::new();
-    T.get_or_init(|| gdk::Texture::from_filename(ICON_PENDING_PATH).expect("icon load"))
-}
 
 pub struct PkgUpdate {
     /// Last-seen update count, kept for the displayed-value coalescing check
@@ -73,7 +54,7 @@ impl SimpleComponent for PkgUpdate {
             set_valign: gtk::Align::Center,
             #[name = "icon"]
             gtk::Image {
-                set_paintable: Some(cached_uptodate_texture()),
+                set_icon_name: Some(ICON_OK),
                 set_pixel_size: config::ICON_SIZE() as i32,
             },
             #[name = "label"]
@@ -129,13 +110,13 @@ impl SimpleComponent for PkgUpdate {
                 self.initialized = true;
 
                 if count == 0 {
-                    self.icon.set_paintable(Some(cached_uptodate_texture()));
+                    self.icon.set_icon_name(Some(ICON_OK));
                     self.label.set_visible(false);
                     self.label.set_label("");
                     set_exclusive_class(&self.label, "pkg-update-ok", STATE_CLASSES);
                     set_exclusive_class(&self.icon, "pkg-update-ok", STATE_CLASSES);
                 } else {
-                    self.icon.set_paintable(Some(cached_pending_texture()));
+                    self.icon.set_icon_name(Some(ICON_PENDING));
                     self.label.set_label(&count.to_string());
                     self.label.set_visible(true);
                     set_exclusive_class(&self.label, "pkg-update-pending", STATE_CLASSES);

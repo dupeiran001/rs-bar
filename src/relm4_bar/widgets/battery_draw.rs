@@ -9,8 +9,6 @@
 //!
 //! Mirrors the canonical relm4 widget pattern documented in `cpu_usage.rs`.
 
-use std::sync::OnceLock;
-
 use gtk::prelude::*;
 use relm4::prelude::*;
 
@@ -19,7 +17,7 @@ use crate::relm4_bar::hub;
 
 use super::{NamedWidget, WidgetInit, capsule, set_exclusive_class};
 
-const ICON_PATH: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/assets/icons/battery.svg");
+const ICON_NAME: &str = "battery-symbolic";
 
 /// CSS classes for color bands. `set_exclusive_class` strips the others
 /// before adding the chosen one, so stale classes can't accumulate.
@@ -29,14 +27,6 @@ const COLOR_CLASSES: &[&str] = &[
     "battery-draw-norm",
     "battery-draw-dim",
 ];
-
-/// Parse the SVG icon once and reuse the resulting `gdk::Texture` across
-/// every bar instance. The path is hard-coded with `concat!(env!(…))`, so a
-/// missing icon is a build-time problem and `expect` here is acceptable.
-fn cached_texture() -> &'static gdk::Texture {
-    static T: OnceLock<gdk::Texture> = OnceLock::new();
-    T.get_or_init(|| gdk::Texture::from_filename(ICON_PATH).expect("icon load"))
-}
 
 /// Quantise a float watts value to the precision of its display
 /// (one decimal place: `X.X`). Used to skip redundant paints when the
@@ -79,7 +69,7 @@ impl SimpleComponent for BatteryDraw {
             set_visible: false,
             #[name = "icon"]
             gtk::Image {
-                set_paintable: Some(cached_texture()),
+                set_icon_name: Some(ICON_NAME),
                 set_pixel_size: config::ICON_SIZE() as i32,
             },
             #[name = "label"]
