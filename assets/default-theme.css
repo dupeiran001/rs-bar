@@ -216,10 +216,12 @@ popover.background > contents {
     box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
 }
 
-/* Generic popover buttons — applies to every <button> living inside one of
-   our popovers. Specificity (`popover.background button`) outranks GTK's
-   default button theme so the cascade gives us @rs_fg / @rs_surface even
-   for anonymous buttons (e.g. ListBox row buttons). */
+/* Generic popover buttons — covers every <button> inside any popover we open
+   (gtk::Popover applies the `.background` class but some themes match by tag
+   alone, so include both forms). Also override the inner Label's colour
+   explicitly: GTK4 default themes set `color` on `button label` directly,
+   which would otherwise win the cascade against our `button { color: … }`. */
+popover button,
 popover.background button {
     background-color: @rs_surface;
     color: @rs_fg;
@@ -230,16 +232,36 @@ popover.background button {
     text-shadow: none;
     -gtk-icon-shadow: none;
 }
+popover button label,
+popover.background button label {
+    color: @rs_fg;
+    background: transparent;
+}
+popover button:hover,
 popover.background button:hover {
     background-color: @rs_border_highlight;
     color: @rs_fg;
 }
+popover button:hover label,
+popover.background button:hover label {
+    color: @rs_fg;
+}
+popover button:active,
 popover.background button:active {
     background-color: @rs_accent;
     color: @rs_bg;
 }
+popover button:active label,
+popover.background button:active label {
+    color: @rs_bg;
+}
+popover button:disabled,
 popover.background button:disabled {
     background-color: @rs_surface;
+    color: @rs_fg_dark;
+}
+popover button:disabled label,
+popover.background button:disabled label {
     color: @rs_fg_dark;
 }
 
