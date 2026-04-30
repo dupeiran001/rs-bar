@@ -62,8 +62,16 @@ impl SimpleComponent for Minimap {
         gtk::Box {
             set_orientation: gtk::Orientation::Horizontal,
             set_valign: gtk::Align::Center,
+            // Hard-clip overflow: niri's overview mode can report tiles
+            // stacked beyond the bar's content height (vertical columns,
+            // workspace previews). Without clipping, the inner Fixed grows
+            // to contain them and pushes the bar window taller.
+            set_overflow: gtk::Overflow::Hidden,
             #[name = "container"]
-            gtk::Fixed {},
+            gtk::Fixed {
+                set_valign: gtk::Align::Center,
+                set_overflow: gtk::Overflow::Hidden,
+            },
         }
     }
 
@@ -194,7 +202,12 @@ impl SimpleComponent for Minimap {
                 let (out_w, out_h) =
                     output_size.unwrap_or((total_w.max(1.0), total_h.max(1.0)));
                 let view_w = total_w.max(out_w);
-                let view_h = out_h.max(1.0);
+                // Include total_h in the vertical viewport so vertically-
+                // stacked windows (niri overview, vertical columns) scale
+                // down to fit map_h. Without this, total_h could exceed
+                // view_h and tiles would overflow past map_h, dragging the
+                // bar window taller via Fixed's natural-size propagation.
+                let view_h = out_h.max(total_h).max(1.0);
 
                 let map_h = (config::CONTENT_HEIGHT() - 4.0).max(2.0) as f64;
                 let scale = map_h / view_h;

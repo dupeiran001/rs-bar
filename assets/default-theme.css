@@ -225,6 +225,16 @@ popover.background > contents {
     box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
 }
 
+/* Popover arrow (triangle pointer that anchors the popover to its widget).
+   GTK draws this as a separate `arrow` CSS node and would otherwise pick up
+   the system theme's white. Style it to match the popover bg. */
+popover arrow,
+popover.background arrow {
+    background-color: @rs_bg;
+    border-color: @rs_border_highlight;
+    -gtk-icon-shadow: none;
+}
+
 /* Buttons in popovers — explicit override for GTK's default theme.
    Several GTK themes use `background-image` (gradient) instead of plain
    `background-color`, which would otherwise leak through. We zero both,
