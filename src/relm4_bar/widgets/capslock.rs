@@ -39,12 +39,15 @@ impl SimpleComponent for CapsLock {
         gtk::Box {
             set_orientation: gtk::Orientation::Horizontal,
             set_valign: gtk::Align::Center,
+            set_halign: gtk::Align::Center,
             set_visible: false,
             #[name = "icon"]
             gtk::Image {
                 set_icon_name: Some(ICON_NAME),
                 set_pixel_size: config::ICON_SIZE() as i32,
                 add_css_class: "capslock-active",
+                set_halign: gtk::Align::Center,
+                set_hexpand: true,
             },
         }
     }

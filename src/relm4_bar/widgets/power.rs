@@ -31,10 +31,13 @@ impl SimpleComponent for Power {
         gtk::Box {
             set_orientation: gtk::Orientation::Horizontal,
             set_valign: gtk::Align::Center,
+            set_halign: gtk::Align::Center,
             add_css_class: "power-button",
             gtk::Image {
                 set_icon_name: Some(ICON_NAME),
                 set_pixel_size: config::ICON_SIZE() as i32,
+                set_halign: gtk::Align::Center,
+                set_hexpand: true,
             },
         }
     }

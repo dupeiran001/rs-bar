@@ -40,10 +40,13 @@ impl SimpleComponent for Fcitx {
         gtk::Box {
             set_orientation: gtk::Orientation::Horizontal,
             set_valign: gtk::Align::Center,
+            set_halign: gtk::Align::Center,
             #[name = "label"]
             gtk::Label {
                 set_label: "?",
                 add_css_class: "fcitx-unknown",
+                set_halign: gtk::Align::Center,
+                set_hexpand: true,
             },
         }
     }
