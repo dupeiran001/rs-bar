@@ -37,7 +37,11 @@ window.rs-bar {
     padding: 0 4px;
 }
 
-.bar-group separator {
+/* Vertical separators inside a group (`group!(A, |, B)`) AND inside a
+   single-widget capsule that has its own internal separator (e.g. the
+   P/E divider in CpuFreq). One rule for both so they look identical. */
+.bar-group separator,
+.bar-capsule separator {
     background-color: @rs_fg_gutter;
     min-width: 1px;
     margin: 4px 2px;

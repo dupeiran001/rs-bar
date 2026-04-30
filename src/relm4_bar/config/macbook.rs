@@ -39,7 +39,7 @@ pub(super) fn bar() -> BarLayout {
     BarLayout {
         left: widgets!(Workspaces, Minimap, WindowTitle),
         center_left: widgets!(
-            group!(CpuFreqGraph, CpuFreq),
+            group!(CpuFreqGraph, |, CpuFreq),
             group!(CpuUsage, |, CpuTemp),
             Memory
         ),

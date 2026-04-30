@@ -34,7 +34,7 @@ pub(super) fn config() -> Config {
 pub(super) fn bar() -> BarLayout {
     BarLayout {
         left: widgets!(Workspaces, Minimap, WindowTitle),
-        center_left: widgets!(group!(CpuFreqGraph, CpuFreq), group!(CpuUsage, |, CpuTemp), Memory),
+        center_left: widgets!(group!(CpuFreqGraph, |, CpuFreq), group!(CpuUsage, |, CpuTemp), Memory),
         center: widgets!(Clock),
         center_right: widgets!(
             Wifi,
