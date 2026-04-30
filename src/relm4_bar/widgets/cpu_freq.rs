@@ -17,13 +17,10 @@ use gtk::cairo;
 use gtk::prelude::*;
 use relm4::prelude::*;
 
-use crate::relm4_bar::config;
 use crate::relm4_bar::hub;
 use crate::relm4_bar::hub::cpu_freq::FreqDisplay;
 
 use super::{NamedWidget, WidgetInit, capsule};
-
-const ICON_NAME: &str = "cpu-freq-symbolic";
 
 /// Number of historical samples to plot (one per second). Matches rs-bar's
 /// `HISTORY_SIZE` so the sparkline shape mirrors the GPUI version.
@@ -78,10 +75,6 @@ impl SimpleComponent for CpuFreq {
                 set_content_width: SPARK_W,
                 set_content_height: SPARK_H,
                 set_valign: gtk::Align::Center,
-            },
-            gtk::Image {
-                set_icon_name: Some(ICON_NAME),
-                set_pixel_size: config::ICON_SIZE() as i32,
             },
             #[name = "label"]
             gtk::Label {
@@ -230,12 +223,14 @@ fn draw_sparkline(
 
     let range = (max_freq_ghz - min_freq_ghz).max(0.1);
 
-    // Nord frost-2 (#88C0D0) accent colour and a dimmer shade. Hardcoded
-    // because looking up CSS variables from inside a draw callback is awkward
-    // in GTK4 — the user's theme can still override the bar's background, and
-    // the decay-from-old behaviour matches the GPUI version visually.
-    let accent_dim = (0x6c as f64 / 255.0, 0x9e as f64 / 255.0, 0xb0 as f64 / 255.0);
-    let accent = (0x88 as f64 / 255.0, 0xc0 as f64 / 255.0, 0xd0 as f64 / 255.0);
+    // Nord frost-2 (#88C0D0) accent colour. Hardcoded because looking up
+    // CSS variables from inside a draw callback is awkward in GTK4. Older
+    // samples fade toward fully-transparent on the left edge so the
+    // sparkline visually "trails off" into the past — same behaviour as
+    // rs-bar's GPUI version.
+    let r = 0x88 as f64 / 255.0;
+    let g = 0xc0 as f64 / 255.0;
+    let b = 0xd0 as f64 / 255.0;
 
     for (i, &ghz) in samples.iter().enumerate() {
         let norm = ((ghz - min_freq_ghz) / range).clamp(0.0, 1.0) as f64;
@@ -243,8 +238,15 @@ fn draw_sparkline(
         let bar_h = (norm * (h_f - 1.0) + 1.0).max(1.0);
         let y = h_f - bar_h;
         let x = x_offset + i as f64 * bar_w;
-        let (r, g, b) = if (i + 1) == n { accent } else { accent_dim };
-        cr.set_source_rgb(r, g, b);
+        // Linear fade across the visible window — newest sample is opaque,
+        // oldest sample is ~25% alpha. With i = 0 oldest, i = n-1 newest:
+        //   alpha = 0.25 + 0.75 * (i / (n-1))
+        let alpha = if n <= 1 {
+            1.0
+        } else {
+            0.25 + 0.75 * (i as f64) / ((n - 1) as f64)
+        };
+        cr.set_source_rgba(r, g, b, alpha);
         cr.rectangle(x, y, bar_w, bar_h);
         let _ = cr.fill();
     }
