@@ -9,6 +9,27 @@ use crate::relm4_bar::config;
 
 const DEFAULT_CSS: &str = include_str!("../../assets/default-theme.css");
 
+/// Stub written to ~/.config/rs-bar/gtk-theme.css on first run. Kept short and
+/// purely additive — full default rules ship embedded in the binary, and we
+/// load the embedded copy unconditionally so theme-CSS updates land cleanly
+/// across rs-bar versions. Users put their personal overrides here.
+const USER_CSS_STUB: &str = "/* rs-bar user theme overrides.
+ *
+ * The full default theme is bundled in the binary and always loads first;
+ * anything you put here is appended on top, so add only the rules you want
+ * to override or extend. Theme color variables (@rs_bg, @rs_fg, @rs_accent,
+ * etc.) are pre-defined from the active profile's Theme struct.
+ *
+ * Example:
+ *
+ *   /* Make the bar slightly translucent: */
+ *   /* window.rs-bar { background-color: alpha(@rs_bg, 0.85); } */
+ *
+ *   /* Use a different accent: */
+ *   /* @define-color rs_accent #f6c177; */
+ */
+";
+
 fn theme_color_block() -> String {
     let t = config::THEME();
     let c = |name: &str, v: u32| format!("@define-color {name} #{v:06X};\n");
@@ -52,8 +73,8 @@ fn maybe_bootstrap_user_css() {
     if let Some(parent) = path.parent() {
         let _ = std::fs::create_dir_all(parent);
     }
-    if std::fs::write(&path, DEFAULT_CSS).is_ok() {
-        log::info!("wrote default theme to {}", path.display());
+    if std::fs::write(&path, USER_CSS_STUB).is_ok() {
+        log::info!("wrote user-css stub to {}", path.display());
     }
 }
 

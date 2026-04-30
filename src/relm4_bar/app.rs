@@ -48,13 +48,12 @@ impl Component for App {
     fn init(_: Self::Init, root: Self::Root, sender: ComponentSender<Self>) -> ComponentParts<Self> {
         style::load();
 
-        // Suppress the management window. `connect_realize` fires before the
-        // window's surface is mapped, so calling `set_visible(false)` here
-        // prevents it from flashing on screen. We also hide on `connect_show`
-        // as a belt-and-braces guard against compositors that map regardless.
-        root.connect_realize(|w| {
-            w.set_visible(false);
-        });
+        // Suppress the management window. relm4's RelmApp::run calls present()
+        // on this root after init returns, which goes through the realize →
+        // map → show sequence. Hiding on `connect_show` (which fires *after*
+        // map completes) is clean — hiding earlier in `connect_realize` trips
+        // GTK's `gtk_widget_map: assertion '_gtk_widget_get_visible (widget)'`
+        // because GTK's map step expects the widget to still be visible.
         root.connect_show(|w| {
             w.set_visible(false);
         });
