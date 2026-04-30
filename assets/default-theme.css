@@ -151,21 +151,17 @@ window.rs-bar {
 /* Window title */
 .window-title { color: @rs_fg; }
 
-/* Workspaces */
-.workspace-pill {
-    padding: 0 8px;
+/* Workspaces — fixed-size dots with three colour states matching the GPUI bar:
+   active  → 18×9 accent pill,  has windows → 9×9 dim,  empty → 9×9 gutter. */
+.workspace-dot {
     border-radius: 9999px;
-    color: @rs_fg_dark;
-    min-width: 8px;
+    margin: 0 2px;
+    min-height: 9px;
 }
-.workspace-pill.workspace-active {
-    background-color: @rs_accent;
-    color: @rs_bg;
-}
-.workspace-pill.workspace-urgent {
-    background-color: @rs_red;
-    color: @rs_bg;
-}
+.workspace-dot-active  { background-color: @rs_accent;    min-width: 18px; min-height: 9px; }
+.workspace-dot-windows { background-color: @rs_text_dim;  min-width:  9px; min-height: 9px; }
+.workspace-dot-empty   { background-color: @rs_fg_gutter; min-width:  9px; min-height: 9px; }
+.workspace-dot-urgent  { background-color: @rs_red; }
 
 /* Minimap window dots */
 .minimap-window {

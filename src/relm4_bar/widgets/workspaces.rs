@@ -106,21 +106,33 @@ impl SimpleComponent for Workspaces {
                 }
 
                 for ws in &workspaces {
-                    let pill = gtk::Label::new(Some(&format!("{}", ws.idx)));
-                    pill.add_css_class("workspace-pill");
+                    // Render each workspace as a fixed-size dot rather than a
+                    // numeric pill — matches the GPUI bar's three-state dot:
+                    //   active        : 18×9 accent-coloured pill
+                    //   has windows   : 9×9 dim dot
+                    //   empty         : 9×9 gutter-coloured dot
+                    let dot = gtk::Box::new(gtk::Orientation::Horizontal, 0);
+                    dot.add_css_class("workspace-dot");
                     if ws.is_active {
-                        pill.add_css_class("workspace-active");
+                        dot.add_css_class("workspace-dot-active");
+                        dot.set_size_request(18, 9);
+                    } else if ws.active_window_id.is_some() {
+                        dot.add_css_class("workspace-dot-windows");
+                        dot.set_size_request(9, 9);
+                    } else {
+                        dot.add_css_class("workspace-dot-empty");
+                        dot.set_size_request(9, 9);
                     }
                     if ws.is_urgent {
-                        pill.add_css_class("workspace-urgent");
+                        dot.add_css_class("workspace-dot-urgent");
                     }
 
                     let id = ws.id;
                     let click = gtk::GestureClick::new();
                     click.connect_pressed(move |_, _, _, _| focus_workspace(id));
-                    pill.add_controller(click);
+                    dot.add_controller(click);
 
-                    self.container.append(&pill);
+                    self.container.append(&dot);
                 }
             }
         }
