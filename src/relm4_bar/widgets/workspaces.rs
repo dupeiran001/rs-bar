@@ -111,8 +111,16 @@ impl SimpleComponent for Workspaces {
                     //   active        : 18×9 accent-coloured pill
                     //   has windows   : 9×9 dim dot
                     //   empty         : 9×9 gutter-coloured dot
+                    //
+                    // halign / valign = Center so the dot stays at its
+                    // requested size and doesn't stretch to fill the parent
+                    // capsule's height (GTK's default child alignment is
+                    // Fill, which would otherwise make the 9px dots tall as
+                    // the capsule and render as horizontal lines).
                     let dot = gtk::Box::new(gtk::Orientation::Horizontal, 0);
                     dot.add_css_class("workspace-dot");
+                    dot.set_halign(gtk::Align::Center);
+                    dot.set_valign(gtk::Align::Center);
                     if ws.is_active {
                         dot.add_css_class("workspace-dot-active");
                         dot.set_size_request(18, 9);

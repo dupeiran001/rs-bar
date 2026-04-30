@@ -225,13 +225,18 @@ popover.background > contents {
     box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
 }
 
-/* Generic popover buttons — covers every <button> inside any popover we open
-   (gtk::Popover applies the `.background` class but some themes match by tag
-   alone, so include both forms). Also override the inner Label's colour
-   explicitly: GTK4 default themes set `color` on `button label` directly,
-   which would otherwise win the cascade against our `button { color: … }`. */
+/* Buttons in popovers — explicit override for GTK's default theme.
+   Several GTK themes use `background-image` (gradient) instead of plain
+   `background-color`, which would otherwise leak through. We zero both,
+   plus `background` shorthand, and restate the colour on the inner
+   `<label>` so themes that key `color` off `button label` directly don't
+   win the cascade. */
 popover button,
-popover.background button {
+popover.background button,
+.wifi-refresh, .wifi-disconnect,
+.bluetooth-device-button, .volume-mute-toggle {
+    background: @rs_surface;
+    background-image: none;
     background-color: @rs_surface;
     color: @rs_fg;
     border: 1px solid @rs_border_highlight;
@@ -240,14 +245,22 @@ popover.background button {
     box-shadow: none;
     text-shadow: none;
     -gtk-icon-shadow: none;
+    outline: none;
 }
 popover button label,
-popover.background button label {
+popover.background button label,
+.wifi-refresh label, .wifi-disconnect label,
+.bluetooth-device-button label, .volume-mute-toggle label {
     color: @rs_fg;
     background: transparent;
+    background-image: none;
 }
 popover button:hover,
-popover.background button:hover {
+popover.background button:hover,
+.wifi-refresh:hover, .wifi-disconnect:hover,
+.bluetooth-device-button:hover, .volume-mute-toggle:hover {
+    background: @rs_border_highlight;
+    background-image: none;
     background-color: @rs_border_highlight;
     color: @rs_fg;
 }
@@ -257,6 +270,8 @@ popover.background button:hover label {
 }
 popover button:active,
 popover.background button:active {
+    background: @rs_accent;
+    background-image: none;
     background-color: @rs_accent;
     color: @rs_bg;
 }
@@ -266,6 +281,8 @@ popover.background button:active label {
 }
 popover button:disabled,
 popover.background button:disabled {
+    background: @rs_surface;
+    background-image: none;
     background-color: @rs_surface;
     color: @rs_fg_dark;
 }
@@ -279,10 +296,16 @@ popover.background button:disabled label {
 button.flat {
     color: @rs_fg;
     background: transparent;
+    background-image: none;
     border: none;
     box-shadow: none;
 }
+button.flat label {
+    color: @rs_fg;
+}
 button.flat:hover {
+    background: @rs_border_highlight;
+    background-image: none;
     background-color: @rs_border_highlight;
     color: @rs_fg;
 }
