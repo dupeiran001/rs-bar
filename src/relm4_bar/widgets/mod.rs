@@ -33,6 +33,7 @@ mod capslock;
 mod clock;
 mod cpu_draw;
 mod cpu_freq;
+mod cpu_freq_graph;
 mod cpu_temp;
 mod cpu_usage;
 mod date;
@@ -60,6 +61,7 @@ pub use capslock::CapsLock;
 pub use clock::Clock;
 pub use cpu_draw::CpuDraw;
 pub use cpu_freq::CpuFreq;
+pub use cpu_freq_graph::CpuFreqGraph;
 pub use cpu_temp::CpuTemp;
 pub use cpu_usage::CpuUsage;
 #[allow(unused_imports)]

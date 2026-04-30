@@ -13,21 +13,19 @@ const DEFAULT_CSS: &str = include_str!("../../assets/default-theme.css");
 /// purely additive — full default rules ship embedded in the binary, and we
 /// load the embedded copy unconditionally so theme-CSS updates land cleanly
 /// across rs-bar versions. Users put their personal overrides here.
+///
+/// CSS does not support nested comments, so each example lives in its own
+/// `/* … */` block — uncomment a whole block to activate it.
 const USER_CSS_STUB: &str = "/* rs-bar user theme overrides.
- *
- * The full default theme is bundled in the binary and always loads first;
- * anything you put here is appended on top, so add only the rules you want
- * to override or extend. Theme color variables (@rs_bg, @rs_fg, @rs_accent,
- * etc.) are pre-defined from the active profile's Theme struct.
- *
- * Example:
- *
- *   /* Make the bar slightly translucent: */
- *   /* window.rs-bar { background-color: alpha(@rs_bg, 0.85); } */
- *
- *   /* Use a different accent: */
- *   /* @define-color rs_accent #f6c177; */
- */
+   The full default theme is bundled in the binary and always loads first;
+   anything you put here is appended on top, so add only the rules you want
+   to override or extend. Theme color variables (@rs_bg, @rs_fg, @rs_accent,
+   …) are pre-defined from the active profile's Theme struct.
+   Examples below — remove the surrounding comment to enable. */
+
+/* window.rs-bar { background-color: alpha(@rs_bg, 0.85); } */
+
+/* @define-color rs_accent #f6c177; */
 ";
 
 fn theme_color_block() -> String {
