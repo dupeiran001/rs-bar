@@ -1,7 +1,7 @@
 #[allow(unused_imports)]
 use crate::relm4_bar::widgets::{
-    Bluetooth, Brightness, CapsLock, Clock, CpuDraw, CpuFreq, CpuTemp, CpuUsage, Fcitx,
-    GpuBusy, GpuDraw, Memory, Minimap, PkgUpdate, Power, Tray, Volume, Wifi, WindowTitle,
+    Bluetooth, Brightness, CapsLock, Clock, CpuDraw, CpuFreq, CpuFreqGraph, CpuTemp, CpuUsage,
+    Fcitx, GpuBusy, GpuDraw, Memory, Minimap, PkgUpdate, Power, Tray, Volume, Wifi, WindowTitle,
     Wireguard, Workspaces,
 };
 #[allow(unused_imports)]
@@ -34,7 +34,7 @@ pub(super) fn config() -> Config {
 pub(super) fn bar() -> BarLayout {
     BarLayout {
         left: widgets!(Workspaces, Minimap, WindowTitle),
-        center_left: widgets!(CpuFreq, group!(CpuUsage, |, CpuTemp), Memory),
+        center_left: widgets!(group!(CpuFreqGraph, CpuFreq), group!(CpuUsage, |, CpuTemp), Memory),
         center: widgets!(Clock),
         center_right: widgets!(
             Wifi,
