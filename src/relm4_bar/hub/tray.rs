@@ -230,13 +230,27 @@ fn listener(tx: watch::Sender<TrayState>, cmd_rx: async_channel::Receiver<TrayCo
 
         let mut events = client.subscribe();
         let items_map = client.items();
+        log::info!("tray-hub: connected to system tray bus");
 
         // Push the initial (likely-empty) snapshot so subscribers don't
         // sit on `Default::default()` if no items exist.
         publish(&tx, &items_map);
 
+        // Defensive periodic re-publish every 5s. Belts-and-braces against
+        // races at startup (apps that register on the bus while we were
+        // mid-`subscribe()` may have their `Add` event miss us) and against
+        // any client-side state drift. Cost is negligible: when nothing has
+        // changed the publish is a no-op against the watch channel.
+        let mut tick = tokio::time::interval(std::time::Duration::from_secs(5));
+        tick.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
+        // Skip the first immediate tick — we just published above.
+        let _ = tick.tick().await;
+
         loop {
             tokio::select! {
+                _ = tick.tick() => {
+                    publish(&tx, &items_map);
+                }
                 ev = events.recv() => {
                     match ev {
                         Ok(Event::Add(_, _))

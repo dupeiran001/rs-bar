@@ -18,7 +18,7 @@ use chrono::Local;
 use gtk::prelude::*;
 use relm4::prelude::*;
 
-use super::{NamedWidget, WidgetInit, capsule};
+use super::{NamedWidget, WidgetInit, capsule, capsule_interactive};
 
 fn format_time() -> String {
     Local::now().format("%H:%M").to_string()
@@ -92,6 +92,7 @@ impl SimpleComponent for Clock {
         };
 
         capsule(&root, model.grouped);
+        capsule_interactive(&root, model.grouped);
 
         // Self-spawned 1Hz timer. Sends Tick to the component each second; the
         // `update` handler does the displayed-value coalescing check.

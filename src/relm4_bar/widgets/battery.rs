@@ -28,7 +28,7 @@ use crate::relm4_bar::config;
 use crate::relm4_bar::hub;
 use crate::relm4_bar::hub::battery::{BatteryState, BatteryStatus};
 
-use super::{NamedWidget, WidgetInit, capsule, set_exclusive_class};
+use super::{NamedWidget, WidgetInit, capsule, capsule_interactive, set_exclusive_class};
 
 /// Symbolic icon names registered via the IconTheme search path. The
 /// `*-symbolic.svg` files use `fill="currentColor"` so they recolor with
@@ -225,6 +225,7 @@ impl SimpleComponent for Battery {
         };
 
         capsule(&root, model.grouped);
+        capsule_interactive(&root, model.grouped);
 
         // Subscription: bridge the watch::Receiver<BatteryState> into messages.
         let mut rx = hub::battery::subscribe();

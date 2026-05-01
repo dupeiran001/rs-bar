@@ -6,7 +6,7 @@ use relm4::prelude::*;
 
 use crate::relm4_bar::config;
 
-use super::{NamedWidget, WidgetInit, capsule_icon};
+use super::{NamedWidget, WidgetInit, capsule_icon, capsule_interactive};
 
 /// Symbolic icon name registered via the IconTheme search path. The
 /// `power-symbolic.svg` copy uses `fill="currentColor"` so it picks up the
@@ -53,6 +53,7 @@ impl SimpleComponent for Power {
         };
 
         capsule_icon(&root, model.grouped);
+        capsule_interactive(&root, model.grouped);
 
         // Click → shell out to the configured power command. The command is a
         // `&'static str`, so it's safe to move into the closure.

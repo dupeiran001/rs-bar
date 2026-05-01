@@ -232,13 +232,11 @@ impl SimpleComponent for Minimap {
                 // bar window taller via Fixed's natural-size propagation.
                 let view_h = out_h.max(total_h).max(1.0);
 
-                // Map height is small enough to fit comfortably inside the
-                // 24px-min capsule (border + padding consumes ~2-4px). We
-                // additionally vertically-center the tiles within map_h
-                // below, so any slack between scaled content and map_h
-                // distributes evenly above/below instead of pushing tiles
-                // to the top.
-                let map_h: f64 = 18.0;
+                // Map height: 22px fills the 24px-min capsule (border 1+1)
+                // wall-to-wall. We still vertically-center the tiles within
+                // map_h below, so any slack between scaled content and
+                // map_h distributes evenly above/below.
+                let map_h: f64 = 22.0;
                 let scale = map_h / view_h;
                 let map_w = (view_w * scale).max(1.0);
                 let scaled_total_h = total_h * scale;

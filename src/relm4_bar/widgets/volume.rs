@@ -25,7 +25,7 @@ use crate::relm4_bar::config;
 use crate::relm4_bar::hub;
 use crate::relm4_bar::hub::volume::{SinkInfo, VolumeState};
 
-use super::{NamedWidget, WidgetInit, capsule, set_exclusive_class};
+use super::{NamedWidget, WidgetInit, capsule, capsule_interactive, set_exclusive_class};
 
 const ICON_HIGH: &str = "volume-high-symbolic";
 const ICON_LOW: &str = "volume-low-symbolic";
@@ -190,6 +190,7 @@ impl SimpleComponent for Volume {
         };
 
         capsule(&root, model.grouped);
+        capsule_interactive(&root, model.grouped);
         root.set_cursor_from_name(Some("pointer"));
 
         // ── Signal wiring ──────────────────────────────────────────────

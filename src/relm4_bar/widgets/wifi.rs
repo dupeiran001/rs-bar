@@ -23,7 +23,7 @@ use crate::relm4_bar::config;
 use crate::relm4_bar::hub;
 use crate::relm4_bar::hub::wifi::{KnownNetwork, WifiState};
 
-use super::{NamedWidget, WidgetInit, capsule, set_exclusive_class};
+use super::{NamedWidget, WidgetInit, capsule, capsule_interactive, set_exclusive_class};
 
 // ── symbolic icon names (one per signal band) ───────────────────────────
 
@@ -241,6 +241,7 @@ impl SimpleComponent for Wifi {
         };
 
         capsule(&root, model.grouped);
+        capsule_interactive(&root, model.grouped);
 
         // Subscription: bridge the watch::Receiver<WifiState> into messages.
         let mut rx = hub::wifi::subscribe();

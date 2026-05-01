@@ -173,6 +173,18 @@ pub fn capsule_icon(w: &impl glib::object::IsA<gtk::Widget>, grouped: bool) {
     }
 }
 
+/// Mark a capsule as interactive — adds the `interactive` CSS class so the
+/// hover rules in default-theme.css fire (background lift on `:hover`),
+/// plus sets the cursor to pointer. Call this after `capsule()` /
+/// `capsule_icon()` in widgets that respond to clicks (popovers, scroll,
+/// shell-out). No-op when grouped (the parent group owns the visuals).
+pub fn capsule_interactive(w: &impl glib::object::IsA<gtk::Widget>, grouped: bool) {
+    if !grouped {
+        w.add_css_class("interactive");
+        w.set_cursor_from_name(Some("pointer"));
+    }
+}
+
 /// Toggle a widget into exactly one CSS class out of a mutually-exclusive set,
 /// stripping all the others first. Used for color bands / on-off states.
 ///

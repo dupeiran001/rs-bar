@@ -56,6 +56,20 @@ window.rs-bar {
     min-width: 24px;
 }
 
+/* Interactive capsules — widgets that react to clicks (popovers, scroll,
+   shell-out commands) opt into the `interactive` class via
+   `capsule_interactive()`. Hover lifts the background to mark the affordance.
+   Combined with `capsule_icon` it covers the circular interactive widgets too
+   (Power, Bluetooth, Wireguard). */
+.bar-capsule.interactive {
+    transition: background-color 160ms ease,
+                border-color     160ms ease;
+}
+.bar-capsule.interactive:hover {
+    background-color: @rs_border_highlight;
+    border-color: @rs_border_highlight;
+}
+
 .bar-border-top, .bar-border-bottom {
     background-color: @rs_bg;
     min-height: 1px;

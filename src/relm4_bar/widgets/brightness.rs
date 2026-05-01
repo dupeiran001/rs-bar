@@ -17,7 +17,7 @@ use relm4::prelude::*;
 use crate::relm4_bar::config;
 use crate::relm4_bar::hub;
 
-use super::{NamedWidget, WidgetInit, capsule, set_exclusive_class};
+use super::{NamedWidget, WidgetInit, capsule, capsule_interactive, set_exclusive_class};
 
 const ICON_HIGH: &str = "brightness-high-symbolic";
 const ICON_LOW: &str = "brightness-low-symbolic";
@@ -119,6 +119,7 @@ impl SimpleComponent for Brightness {
         };
 
         capsule(&root, model.grouped);
+        capsule_interactive(&root, model.grouped);
         root.set_cursor_from_name(Some("pointer"));
 
         // ── Signal wiring ──────────────────────────────────────────────

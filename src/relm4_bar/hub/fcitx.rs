@@ -81,19 +81,27 @@ fn listener(tx: watch::Sender<FcitxState>) {
     rt.block_on(async move {
         let mut tray_rx = crate::relm4_bar::hub::tray::subscribe();
 
-        // Initial query so the bar shows something before the first tray event.
+        // Initial query so the bar shows something before the first event.
         let initial = query_fcitx().await;
         let _ = tx.send(FcitxState { im: initial });
 
+        // Wake on tray events OR every 2s. The tray-event path is the fast
+        // path (instant updates when fcitx switches IMs and emits an SNI
+        // change). The 2s tick is a safety net: not every fcitx setup ships
+        // its tray icon, and even when it does, IM switches that don't
+        // change the icon (e.g. between two pinyin sub-modes) wouldn't fire
+        // an SNI Update. Polling guarantees the bar converges within ~2s.
         loop {
-            // Wake on every tray-state change. fcitx5 publishes itself as an
-            // SNI item, so any input-method switch produces a tray update.
-            if tray_rx.changed().await.is_err() {
-                log::error!("fcitx-hub: tray channel closed");
-                break;
+            tokio::select! {
+                changed = tray_rx.changed() => {
+                    if changed.is_err() {
+                        log::error!("fcitx-hub: tray channel closed");
+                        break;
+                    }
+                    tray_rx.borrow_and_update();
+                }
+                _ = tokio::time::sleep(std::time::Duration::from_secs(2)) => {}
             }
-            // Drain any further changes; we only care about the latest state.
-            tray_rx.borrow_and_update();
 
             let im = query_fcitx().await;
             let new = FcitxState { im };
