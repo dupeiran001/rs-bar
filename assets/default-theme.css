@@ -176,14 +176,16 @@ window.rs-bar {
 .workspace-dot-empty   { background-color: @rs_fg_gutter; min-width:  9px; min-height: 9px; }
 .workspace-dot-urgent  { background-color: @rs_red; }
 
-/* Minimap window tiles. Three-state colour hierarchy mirroring rs-bar's
-   GPUI version:
-     focused (globally) : @rs_accent       — brightest
-     active on this ws  : @rs_accent_dim   — medium (was-focused on another monitor)
-     other              : @rs_border       — dim
+/* Minimap window tiles. Three-state colour hierarchy:
+     focused (globally) : @rs_accent       — brightest (currently typing here)
+     active on this ws  : @rs_accent_dim   — darker blue (was-focused on this
+                                             monitor, now elsewhere)
+     other              : @rs_fg_gutter    — neutral gutter — dimmer than the
+                                             active accent so the hierarchy reads
+                                             focused > active > inactive at a glance.
 */
 .minimap-window {
-    background-color: @rs_border;
+    background-color: @rs_fg_gutter;
     border-radius: 2px;
     border: 1px solid @rs_border_highlight;
     margin: 1px;
