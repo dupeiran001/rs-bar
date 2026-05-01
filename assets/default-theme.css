@@ -16,7 +16,7 @@ window.rs-bar {
     background-color: @rs_bg;
     color: @rs_fg;
     font-family: "CaskaydiaCove Nerd Font", "Cascadia Code", monospace;
-    font-weight: 600;
+    font-weight: 700;
     font-size: 12px;
 }
 
