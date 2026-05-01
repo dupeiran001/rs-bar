@@ -198,9 +198,15 @@ window.rs-bar {
 */
 .minimap-window {
     background-color: @rs_fg_gutter;
-    border-radius: 2px;
+    border-radius: 4px;
     border: 1px solid @rs_border_highlight;
     margin: 1px;
+    transition: background-color 180ms ease,
+                border-color     180ms ease,
+                opacity          180ms ease;
+}
+.minimap-window:hover {
+    border-color: @rs_fg;
 }
 .minimap-window-active {
     background-color: @rs_accent_dim;

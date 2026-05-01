@@ -126,24 +126,30 @@ fn sender() -> &'static watch::Sender<GpuBusySample> {
         let _ = std::thread::Builder::new()
             .name("gpu-busy".into())
             .spawn(move || {
+                use std::time::Instant;
                 let mut prev_residency: Option<u64> = match &src {
                     GpuBusySource::Residency { path } => read_residency_ms(path),
                     _ => None,
                 };
+                let mut prev_time = Instant::now();
                 timerfd_loop(std::time::Duration::from_millis(500), false, || {
+                    let now = Instant::now();
+                    let elapsed_ms = now.duration_since(prev_time).as_millis() as u64;
+                    prev_time = now;
+
                     let busy_pct = match &src {
                         GpuBusySource::Direct { path } => read_busy_direct(path),
                         GpuBusySource::Residency { path } => {
+                            // busy% = (elapsed - idle_delta) / elapsed.
+                            // Use measured `elapsed_ms` rather than a hard-
+                            // coded interval so the math stays correct
+                            // regardless of poll cadence.
                             let cur = read_residency_ms(path);
                             let result = match (prev_residency, cur) {
-                                (Some(prev), Some(cur)) if cur >= prev => {
-                                    let idle_ms = cur - prev;
-                                    // interval is 1000 ms; clamp to 0..=100.
-                                    Some(
-                                        100u32.saturating_sub(
-                                            idle_ms.min(1000) as u32 * 100 / 1000,
-                                        ),
-                                    )
+                                (Some(prev), Some(cur)) if cur >= prev && elapsed_ms > 0 => {
+                                    let idle_ms = (cur - prev).min(elapsed_ms);
+                                    let busy_ms = elapsed_ms - idle_ms;
+                                    Some(((busy_ms * 100) / elapsed_ms).min(100) as u32)
                                 }
                                 _ => None,
                             };

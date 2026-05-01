@@ -9,7 +9,9 @@
 use gtk::prelude::*;
 use relm4::prelude::*;
 
-use crate::relm4_bar::config;
+use niri_ipc::socket::Socket;
+use niri_ipc::{Action, Request};
+
 use crate::relm4_bar::hub;
 
 use super::{NamedWidget, WidgetInit, capsule};
@@ -179,6 +181,7 @@ impl SimpleComponent for Minimap {
                 // Reconstruct tile positions: stack tiles vertically within
                 // each scrolling-layout column, columns laid out left to right.
                 struct Tile {
+                    id: u64,
                     x: f64,
                     y: f64,
                     w: f64,
@@ -205,6 +208,7 @@ impl SimpleComponent for Minimap {
                     }
 
                     tiles.push(Tile {
+                        id: win.id,
                         x: col_x,
                         y: col_y,
                         w: tw,
@@ -228,9 +232,17 @@ impl SimpleComponent for Minimap {
                 // bar window taller via Fixed's natural-size propagation.
                 let view_h = out_h.max(total_h).max(1.0);
 
-                let map_h = (config::CONTENT_HEIGHT() - 4.0).max(2.0) as f64;
+                // Map height is small enough to fit comfortably inside the
+                // 24px-min capsule (border + padding consumes ~2-4px). We
+                // additionally vertically-center the tiles within map_h
+                // below, so any slack between scaled content and map_h
+                // distributes evenly above/below instead of pushing tiles
+                // to the top.
+                let map_h: f64 = 18.0;
                 let scale = map_h / view_h;
                 let map_w = (view_w * scale).max(1.0);
+                let scaled_total_h = total_h * scale;
+                let y_offset = ((map_h - scaled_total_h) * 0.5).max(0.0);
 
                 // Tear down all existing children and rebuild from scratch.
                 while let Some(child) = self.container.first_child() {
@@ -250,7 +262,7 @@ impl SimpleComponent for Minimap {
 
                 for tile in tiles {
                     let x = tile.x * scale;
-                    let y = tile.y * scale;
+                    let y = tile.y * scale + y_offset;
                     let w = (tile.w * scale).max(2.0);
                     let h = (tile.h * scale).max(2.0);
 
@@ -266,11 +278,28 @@ impl SimpleComponent for Minimap {
                         r.add_css_class("minimap-window-overview");
                     }
 
+                    // Click → focus that window in niri.
+                    let win_id = tile.id;
+                    let click = gtk::GestureClick::new();
+                    click.connect_pressed(move |_, _, _, _| focus_window(win_id));
+                    r.add_controller(click);
+                    r.set_cursor_from_name(Some("pointer"));
+
                     self.container.put(&r, x, y);
                 }
             }
         }
     }
+}
+
+/// Open a fresh niri socket and dispatch `FocusWindow { id }`. Errors are
+/// swallowed — failing to focus must not panic the bar.
+fn focus_window(id: u64) {
+    std::thread::spawn(move || {
+        if let Ok(mut socket) = Socket::connect() {
+            let _ = socket.send(Request::Action(Action::FocusWindow { id }));
+        }
+    });
 }
 
 impl NamedWidget for Minimap {
