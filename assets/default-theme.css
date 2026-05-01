@@ -176,18 +176,23 @@ window.rs-bar {
 .workspace-dot-empty   { background-color: @rs_fg_gutter; min-width:  9px; min-height: 9px; }
 .workspace-dot-urgent  { background-color: @rs_red; }
 
-/* Minimap window dots */
+/* Minimap window tiles. Three-state colour hierarchy mirroring rs-bar's
+   GPUI version:
+     focused (globally) : @rs_accent       — brightest
+     active on this ws  : @rs_accent_dim   — medium (was-focused on another monitor)
+     other              : @rs_border       — dim
+*/
 .minimap-window {
-    background-color: @rs_fg_gutter;
+    background-color: @rs_border;
     border-radius: 2px;
     border: 1px solid @rs_border_highlight;
     margin: 1px;
 }
-.minimap-window-focused {
-    background-color: @rs_accent_dim;
-    border-color: @rs_accent;
-}
 .minimap-window-active {
+    background-color: @rs_accent_dim;
+    border-color: @rs_accent_dim;
+}
+.minimap-window-focused {
     background-color: @rs_accent;
     border-color: @rs_accent;
 }
