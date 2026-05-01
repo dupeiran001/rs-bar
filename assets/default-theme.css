@@ -75,6 +75,28 @@ window.rs-bar {
     min-height: 1px;
 }
 
+/* Per-half fade overlays. Pinned to the inner edge of each side half (the
+   edge closest to the center column). The bar.rs tick callback toggles
+   `.bar-fade-active` only when the half is actually clipping content, so
+   the gradient is invisible during normal operation and only appears as a
+   soft cut over the truncated capsule's hard edge. The opacity transition
+   keeps the appearance/disappearance from snapping. */
+.bar-fade-left,
+.bar-fade-right {
+    min-width: 36px;
+    opacity: 0;
+    transition: opacity 200ms ease;
+}
+.bar-fade-left {
+    background-image: linear-gradient(to right, alpha(@rs_bg, 0), @rs_bg);
+}
+.bar-fade-right {
+    background-image: linear-gradient(to left, alpha(@rs_bg, 0), @rs_bg);
+}
+.bar-fade-active {
+    opacity: 1;
+}
+
 /* ── 2. Per-widget color states ─────────────────────────────── */
 
 /* CPU usage % */
