@@ -59,7 +59,7 @@ pub struct BatteryState {
     pub health_pct: Option<u32>,
 }
 
-const POLL_SECS: i64 = 5;
+const POLL_INTERVAL: std::time::Duration = std::time::Duration::from_millis(500);
 
 struct BatteryInfo {
     dir: PathBuf,
@@ -248,7 +248,7 @@ fn sender() -> &'static watch::Sender<BatteryState> {
                 // wait `POLL_SECS` for the first sample.
                 let _ = producer.send(read_state(&bat));
 
-                timerfd_loop(POLL_SECS, false, || {
+                timerfd_loop(POLL_INTERVAL, false, || {
                     let s = read_state(&bat);
                     // Returning false would exit the loop; in practice the
                     // sender is held by the OnceLock for the program's

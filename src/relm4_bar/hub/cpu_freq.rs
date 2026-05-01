@@ -219,7 +219,7 @@ fn sender() -> &'static watch::Sender<FreqReading> {
         std::thread::Builder::new()
             .name("cpu-freq".into())
             .spawn(move || {
-                timerfd_loop(1, true, || {
+                timerfd_loop(std::time::Duration::from_millis(500), true, || {
                     // Returning false would exit the loop; in practice the
                     // sender is held by the OnceLock for the program's
                     // lifetime so this never happens.

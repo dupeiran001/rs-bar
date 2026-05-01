@@ -17,8 +17,9 @@ use crate::relm4_bar::config;
 
 use super::sys::timerfd_loop;
 
-/// Poll interval in seconds.
-const INTERVAL_SECS: i64 = 2;
+/// Poll interval. Brightness queries shell out (e.g. brightnessctl), so
+/// keep the cadence at 2s to avoid burning a process exec twice a second.
+const INTERVAL: std::time::Duration = std::time::Duration::from_secs(2);
 
 /// Set on each successful adjustment so the producer thread re-reads on the
 /// next epoll wake even if the timer hasn't fired yet. The producer also reads
@@ -58,7 +59,7 @@ fn sender() -> &'static watch::Sender<u32> {
         std::thread::Builder::new()
             .name("brightness".into())
             .spawn(move || {
-                timerfd_loop(INTERVAL_SECS, false, || {
+                timerfd_loop(INTERVAL, false, || {
                     // Clear the dirty flag — we're about to re-read anyway.
                     DIRTY.store(false, Ordering::Relaxed);
                     let pct = read_brightness();

@@ -130,7 +130,7 @@ fn sender() -> &'static watch::Sender<GpuBusySample> {
                     GpuBusySource::Residency { path } => read_residency_ms(path),
                     _ => None,
                 };
-                timerfd_loop(1, false, || {
+                timerfd_loop(std::time::Duration::from_millis(500), false, || {
                     let busy_pct = match &src {
                         GpuBusySource::Direct { path } => read_busy_direct(path),
                         GpuBusySource::Residency { path } => {

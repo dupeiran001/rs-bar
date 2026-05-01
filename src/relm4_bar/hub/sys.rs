@@ -8,6 +8,7 @@
 
 use std::os::fd::{AsRawFd, FromRawFd, OwnedFd};
 use std::path::Path;
+use std::time::Duration;
 
 pub fn sysfs_u64(path: &Path) -> Option<u64> {
     std::fs::read_to_string(path).ok()?.trim().parse().ok()
@@ -27,20 +28,22 @@ pub fn sysfs_readable(path: &Path) -> bool {
     std::fs::read_to_string(path).is_ok()
 }
 
-/// Run `tick` every `interval_secs` on a timerfd + epoll loop.
+/// Run `tick` at every `interval` on a timerfd + epoll loop.
 /// Returns when `tick` returns `false`.
-pub fn timerfd_loop(interval_secs: i64, fire_immediately: bool, mut tick: impl FnMut() -> bool) {
+pub fn timerfd_loop(interval: Duration, fire_immediately: bool, mut tick: impl FnMut() -> bool) {
     let tfd = unsafe { libc::timerfd_create(libc::CLOCK_MONOTONIC, libc::TFD_CLOEXEC) };
     if tfd < 0 {
         return;
     }
     let tfd = unsafe { OwnedFd::from_raw_fd(tfd) };
 
+    let int_secs = interval.as_secs() as i64;
+    let int_nsecs = interval.subsec_nanos() as i64;
     let spec = libc::itimerspec {
-        it_interval: libc::timespec { tv_sec: interval_secs, tv_nsec: 0 },
+        it_interval: libc::timespec { tv_sec: int_secs, tv_nsec: int_nsecs },
         it_value: libc::timespec {
-            tv_sec: if fire_immediately { 0 } else { interval_secs },
-            tv_nsec: if fire_immediately { 1 } else { 0 },
+            tv_sec: if fire_immediately { 0 } else { int_secs },
+            tv_nsec: if fire_immediately { 1 } else { int_nsecs.max(1) },
         },
     };
     unsafe { libc::timerfd_settime(tfd.as_raw_fd(), 0, &spec, std::ptr::null_mut()) };

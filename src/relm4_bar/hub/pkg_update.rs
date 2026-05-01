@@ -17,7 +17,7 @@ use tokio::sync::watch;
 use super::sys::timerfd_loop;
 
 /// Poll interval in seconds — 10 minutes, matching rs-bar.
-const INTERVAL_SECS: i64 = 600;
+const INTERVAL: std::time::Duration = std::time::Duration::from_secs(600);
 
 // ── helpers ────────────────────────────────────────────────────────────
 
@@ -149,7 +149,7 @@ fn sender() -> &'static watch::Sender<u32> {
                 let distro = detect_distro();
                 // `fire_immediately=true` so the first count is produced at
                 // startup rather than after a 10-minute wait.
-                timerfd_loop(INTERVAL_SECS, true, || {
+                timerfd_loop(INTERVAL, true, || {
                     let total = query_total(distro);
                     // Returning false would exit the loop; in practice the
                     // sender is held by the OnceLock for the program's

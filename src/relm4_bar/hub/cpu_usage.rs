@@ -81,7 +81,7 @@ fn sender() -> &'static watch::Sender<f32> {
             .name("cpu-usage".into())
             .spawn(move || {
                 let mut prev = read_cpu_times();
-                timerfd_loop(1, false, || {
+                timerfd_loop(std::time::Duration::from_millis(500), false, || {
                     let cur = read_cpu_times();
                     let usage = compute_usage(&prev, &cur);
                     prev = cur;

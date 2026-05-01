@@ -160,7 +160,7 @@ fn sender() -> &'static watch::Sender<f32> {
                     let _ = producer.send(t);
                 }
 
-                timerfd_loop(2, false, || {
+                timerfd_loop(std::time::Duration::from_millis(500), false, || {
                     if let Some(t) = read_temp(&source) {
                         // Returning false would exit the loop; in practice
                         // the sender is held by the OnceLock for the

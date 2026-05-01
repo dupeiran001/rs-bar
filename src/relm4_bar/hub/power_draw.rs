@@ -49,7 +49,9 @@ pub struct PowerDrawSample {
     pub gpu_w: Option<f64>,
 }
 
-const POLL_SECS: i64 = 2;
+/// 2s poll. Kept at this cadence because nvidia-smi shellout (the GPU
+/// fallback path) costs 20–80ms per call.
+const POLL_INTERVAL: std::time::Duration = std::time::Duration::from_secs(2);
 
 // ── battery detection / read ──────────────────────────────────────────
 
@@ -411,7 +413,7 @@ fn run_poller(producer: watch::Sender<PowerDrawSample>) {
     let mut gpu_prev_time = Instant::now();
 
     // ── tick ─────────────────────────────────────────────────────
-    timerfd_loop(POLL_SECS, false, || {
+    timerfd_loop(POLL_INTERVAL, false, || {
         let mut sample = PowerDrawSample::default();
 
         if let Some(b) = &battery {

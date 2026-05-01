@@ -45,7 +45,7 @@ fn sender() -> &'static watch::Sender<f32> {
         std::thread::Builder::new()
             .name("memory".into())
             .spawn(move || {
-                timerfd_loop(2, true, || {
+                timerfd_loop(std::time::Duration::from_millis(500), true, || {
                     // Returning false would exit the loop; in practice the
                     // sender is held by the OnceLock for the program's
                     // lifetime so this never happens.

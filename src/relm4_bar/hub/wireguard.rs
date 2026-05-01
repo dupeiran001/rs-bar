@@ -43,7 +43,10 @@ fn sender() -> &'static watch::Sender<bool> {
         std::thread::Builder::new()
             .name("wireguard".into())
             .spawn(move || {
-                timerfd_loop(1, false, || {
+                // 1s poll: nmcli shellout costs ~10ms each; 0.5s would
+                // burn a noticeable percent of one core for a binary signal
+                // that rarely changes.
+                timerfd_loop(std::time::Duration::from_secs(1), false, || {
                     let active = query_active(connection);
                     // Returning false would exit the loop; in practice the
                     // sender is held by the OnceLock for the program's
