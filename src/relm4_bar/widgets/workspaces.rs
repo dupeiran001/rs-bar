@@ -93,7 +93,7 @@ impl SimpleComponent for Workspaces {
         #[name = "container"]
         gtk::Box {
             set_orientation: gtk::Orientation::Horizontal,
-            set_spacing: 4,
+            set_spacing: 3,
             set_valign: gtk::Align::Center,
         }
     }

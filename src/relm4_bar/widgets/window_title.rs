@@ -1,33 +1,39 @@
-//! Window title widget. Subscribes to the niri hub and renders the title of
-//! the focused window on this bar's monitor.
+//! Window title widget. Subscribes to the niri hub and renders an app icon
+//! plus the title of the focused window on this bar's monitor.
 //!
-//! Per-monitor scoping: each bar shows the title of the focused window living
-//! on the workspace currently active on *its* monitor. When the user switches
-//! focus to a window on another monitor, this bar keeps showing whatever was
-//! last visible on its own monitor — so each bar acts independently.
+//! Icon lookup mirrors the GPUI version: try linicon (theme inheritance +
+//! hicolor fallback), then read `.desktop`'s `Icon=` field, then probe
+//! hicolor/scalable and /usr/share/pixmaps directly. The relevant crate
+//! is `linicon` (already a dep) — GTK's own `IconTheme` is also an option,
+//! but linicon handles the .desktop-file dance cleanly and we already use
+//! it in the GPUI backend.
 //!
-//! Mirrors rs-bar's GPUI version: rs-bar doesn't truncate text in code,
-//! relying on overflow-hidden styling. Here we use GTK's ellipsization on the
-//! label which gives the same effect inside a flex container.
+//! Per-monitor scoping: each bar shows the focused window living on its own
+//! monitor's active workspace.
+
+use std::path::PathBuf;
 
 use gtk::prelude::*;
 use relm4::prelude::*;
 
+use crate::relm4_bar::config;
 use crate::relm4_bar::hub;
 
 use super::{NamedWidget, WidgetInit, capsule};
 
 pub struct WindowTitle {
-    /// Connector name (e.g. "DP-2") captured from `BAR_CTX` in `init`. Used
-    /// to scope the focused-window lookup to this bar's monitor.
+    /// Connector name (e.g. "DP-2") captured from `BAR_CTX` in `init`.
     connector: String,
-    /// Last-rendered title text, kept for the displayed-value coalescing
-    /// check in `update`.
-    title: String,
+    /// Last-rendered (app_id, title) pair — coalesces redundant repaints.
+    last_app_id: String,
+    last_title: String,
+    /// Last successfully resolved icon path. Cached so we don't re-probe
+    /// linicon on every snapshot — only when app_id changes.
+    last_icon_path: Option<PathBuf>,
     /// Root box, held so `update` can hide the entire capsule when there's
     /// no focused window to show.
     root: gtk::Box,
-    /// Held so `update` can rewrite the label text.
+    icon: gtk::Image,
     label: gtk::Label,
 }
 
@@ -35,9 +41,6 @@ pub enum WindowTitleMsg {
     Update(hub::niri::NiriSnapshot),
 }
 
-// `NiriSnapshot` doesn't implement `Debug` (it's defined in this crate's hub
-// module). Provide a minimal manual impl so relm4's internals can format the
-// message — same pattern as `workspaces.rs`.
 impl std::fmt::Debug for WindowTitleMsg {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
@@ -59,7 +62,13 @@ impl SimpleComponent for WindowTitle {
     view! {
         gtk::Box {
             set_orientation: gtk::Orientation::Horizontal,
+            set_spacing: 6,
             set_valign: gtk::Align::Center,
+            #[name = "icon"]
+            gtk::Image {
+                set_pixel_size: config::ICON_SIZE() as i32,
+                set_visible: false,
+            },
             #[name = "label"]
             gtk::Label {
                 set_label: "",
@@ -79,17 +88,18 @@ impl SimpleComponent for WindowTitle {
         let connector = super::current_connector().unwrap_or_default();
         let model = WindowTitle {
             connector,
-            title: String::new(),
+            last_app_id: String::new(),
+            last_title: String::new(),
+            last_icon_path: None,
             root: root.clone(),
+            icon: widgets.icon.clone(),
             label: widgets.label.clone(),
         };
 
         capsule(&root, init.grouped);
-        // Start hidden — we'll un-hide on the first non-empty title.
+        // Start hidden; un-hide on the first non-empty title.
         root.set_visible(false);
 
-        // Subscription: forward NiriSnapshot updates as component messages.
-        // Send the current value first so the widget renders immediately.
         let mut rx = hub::niri::subscribe();
         let s = sender.clone();
         relm4::spawn_local(async move {
@@ -107,46 +117,173 @@ impl SimpleComponent for WindowTitle {
     fn update(&mut self, msg: Self::Input, _sender: ComponentSender<Self>) {
         match msg {
             WindowTitleMsg::Update(snapshot) => {
-                // Locate the workspace currently active on this monitor. Niri
-                // guarantees exactly one active workspace per output.
-                let active_ws = snapshot
-                    .workspaces
-                    .iter()
-                    .find(|ws| {
-                        ws.is_active && ws.output.as_deref() == Some(&self.connector)
-                    });
+                let active_ws = snapshot.workspaces.iter().find(|ws| {
+                    ws.is_active && ws.output.as_deref() == Some(&self.connector)
+                });
 
-                // Resolve the focused window for that workspace. Prefer the
-                // workspace's `active_window_id` (set by niri) and fall back
-                // to scanning windows with matching `workspace_id` for the
-                // `is_focused` flag.
-                let new_title = active_ws
-                    .and_then(|ws| {
-                        if let Some(id) = ws.active_window_id {
-                            snapshot.windows.iter().find(|w| w.id == id)
-                        } else {
-                            snapshot
-                                .windows
-                                .iter()
-                                .find(|w| w.workspace_id == Some(ws.id) && w.is_focused)
-                        }
-                    })
-                    .and_then(|w| w.title.clone())
-                    .unwrap_or_default();
+                let focused = active_ws.and_then(|ws| {
+                    if let Some(id) = ws.active_window_id {
+                        snapshot.windows.iter().find(|w| w.id == id)
+                    } else {
+                        snapshot
+                            .windows
+                            .iter()
+                            .find(|w| w.workspace_id == Some(ws.id) && w.is_focused)
+                    }
+                });
 
-                // Coalescing optimisation: skip the GTK property write when
-                // the displayed text hasn't changed.
-                if new_title == self.title {
+                let new_title = focused.and_then(|w| w.title.clone()).unwrap_or_default();
+                let new_app_id = focused.and_then(|w| w.app_id.clone()).unwrap_or_default();
+
+                // Coalesce: nothing changed, do nothing.
+                if new_title == self.last_title && new_app_id == self.last_app_id {
                     return;
                 }
-                self.title = new_title;
-                self.label.set_label(&self.title);
-                // Hide the entire capsule when there's no title to show, so
-                // we don't render an empty pill.
-                self.root.set_visible(!self.title.is_empty());
+
+                // Re-resolve the icon only when the app_id actually changes.
+                if new_app_id != self.last_app_id {
+                    self.last_icon_path = lookup_icon(&new_app_id);
+                    apply_icon(&self.icon, self.last_icon_path.as_deref());
+                }
+                self.last_app_id = new_app_id;
+
+                if new_title != self.last_title {
+                    self.last_title = new_title;
+                    self.label.set_label(&self.last_title);
+                }
+
+                // Show/hide the whole capsule based on whether there's
+                // anything to render. An empty title with no icon means no
+                // focused window.
+                let has_content =
+                    !self.last_title.is_empty() || self.last_icon_path.is_some();
+                self.root.set_visible(has_content);
             }
         }
     }
+}
+
+/// Apply a resolved icon path to the gtk::Image. Falls back to hidden when
+/// `path` is None or load fails.
+fn apply_icon(image: &gtk::Image, path: Option<&std::path::Path>) {
+    if let Some(path) = path {
+        match gdk::Texture::from_filename(path) {
+            Ok(tex) => {
+                image.set_paintable(Some(&tex));
+                image.set_visible(true);
+                return;
+            }
+            Err(e) => {
+                log::debug!("window_title: failed to load icon {}: {e}", path.display());
+            }
+        }
+    }
+    image.set_paintable(None::<&gdk::Paintable>);
+    image.set_visible(false);
+}
+
+/// Look up an app icon via linicon (theme + fallback), .desktop files, and
+/// pixmaps. Mirrors the GPUI version's resolution order so both backends
+/// pick the same icon.
+fn lookup_icon(app_id: &str) -> Option<PathBuf> {
+    if app_id.is_empty() {
+        return None;
+    }
+    let theme = config::ICON_THEME();
+    let short = app_id.rsplit('.').next().unwrap_or(app_id);
+    let candidates = [
+        app_id.to_string(),
+        short.to_string(),
+        app_id.to_lowercase(),
+        short.to_lowercase(),
+    ];
+
+    // 1. linicon (icon-theme inheritance + hicolor fallback)
+    for name in &candidates {
+        if let Some(Ok(icon)) = linicon::lookup_icon(name)
+            .from_theme(theme)
+            .use_fallback_themes(true)
+            .next()
+        {
+            return Some(icon.path);
+        }
+    }
+
+    // 2. .desktop file's Icon= field
+    if let Some(icon_name) = desktop_icon_name(app_id) {
+        if icon_name.starts_with('/') {
+            let p = PathBuf::from(&icon_name);
+            if p.exists() {
+                return Some(p);
+            }
+        }
+        if let Some(Ok(icon)) = linicon::lookup_icon(&icon_name)
+            .from_theme(theme)
+            .use_fallback_themes(true)
+            .next()
+        {
+            return Some(icon.path);
+        }
+        for ext in ["png", "svg", "xpm"] {
+            let p = PathBuf::from(format!("/usr/share/pixmaps/{icon_name}.{ext}"));
+            if p.exists() {
+                return Some(p);
+            }
+        }
+    }
+
+    // 3. Direct hicolor scalable check (linicon may miss these)
+    for name in &candidates {
+        let p = PathBuf::from(format!(
+            "/usr/share/icons/hicolor/scalable/apps/{name}.svg"
+        ));
+        if p.exists() {
+            return Some(p);
+        }
+    }
+
+    // 4. Pixmaps fallback
+    for name in &candidates {
+        for ext in ["png", "svg", "xpm"] {
+            let p = PathBuf::from(format!("/usr/share/pixmaps/{name}.{ext}"));
+            if p.exists() {
+                return Some(p);
+            }
+        }
+    }
+
+    None
+}
+
+/// Read the `Icon=` field from a .desktop file matching the app_id.
+fn desktop_icon_name(app_id: &str) -> Option<String> {
+    let short = app_id.rsplit('.').next().unwrap_or(app_id);
+    let candidates = [
+        format!("{app_id}.desktop"),
+        format!("{short}.desktop"),
+        format!("{}.desktop", app_id.to_lowercase()),
+        format!("{}.desktop", short.to_lowercase()),
+    ];
+
+    let dirs = [
+        PathBuf::from("/usr/share/applications"),
+        PathBuf::from("/usr/local/share/applications"),
+    ];
+
+    for dir in &dirs {
+        for name in &candidates {
+            let path = dir.join(name);
+            if let Ok(contents) = std::fs::read_to_string(&path) {
+                for line in contents.lines() {
+                    if let Some(icon) = line.strip_prefix("Icon=") {
+                        return Some(icon.trim().to_string());
+                    }
+                }
+            }
+        }
+    }
+
+    None
 }
 
 impl NamedWidget for WindowTitle {
