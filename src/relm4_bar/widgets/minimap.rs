@@ -28,8 +28,11 @@ pub struct Minimap {
     /// update so the bar layout claims the right amount of horizontal space.
     row: gtk::Box,
     /// Coalescing key: (window_count, focused_window_id, active_window_on_ws,
-    /// active_workspace_id, overview_open). When unchanged we skip the rebuild.
-    last_key: Option<(usize, Option<u64>, Option<u64>, Option<u64>, bool)>,
+    /// active_workspace_id, overview_open, layout_fingerprint). The fingerprint
+    /// hashes each window's (id, pos_in_scrolling_layout, tile_size) so layout
+    /// changes (e.g. vertically stacking a window in niri overview, which
+    /// halves tile heights) invalidate the cached rebuild.
+    last_key: Option<(usize, Option<u64>, Option<u64>, Option<u64>, bool, u64)>,
 }
 
 pub enum MinimapMsg {
@@ -137,12 +140,28 @@ impl SimpleComponent for Minimap {
 
                 // Coalesce: skip rebuild when the meaningful key is unchanged.
                 let focused_id = ws_windows.iter().find(|w| w.is_focused).map(|w| w.id);
+                // Fingerprint window layout (id + position + tile_size) so a
+                // pure size change (e.g. vertical stacking that halves
+                // neighbouring tile heights) invalidates the cache. Without
+                // this the minimap kept rendering with stale tile_sizes until
+                // a counted-quantity changed (window add/remove/focus).
+                let mut layout_fp: u64 = 0;
+                for w in &ws_windows {
+                    let (col, row) = w.layout.pos_in_scrolling_layout.unwrap_or((0, 0));
+                    let (tw, th) = w.layout.tile_size;
+                    layout_fp = layout_fp.wrapping_mul(1_000_003).wrapping_add(w.id);
+                    layout_fp = layout_fp.wrapping_mul(1_000_003).wrapping_add(col as u64);
+                    layout_fp = layout_fp.wrapping_mul(1_000_003).wrapping_add(row as u64);
+                    layout_fp = layout_fp.wrapping_mul(1_000_003).wrapping_add((tw * 1000.0) as u64);
+                    layout_fp = layout_fp.wrapping_mul(1_000_003).wrapping_add((th * 1000.0) as u64);
+                }
                 let key = (
                     ws_windows.len(),
                     focused_id,
                     active_window_on_ws,
                     active_ws_id,
                     snapshot.overview_open,
+                    layout_fp,
                 );
                 if self.last_key == Some(key) {
                     return;
