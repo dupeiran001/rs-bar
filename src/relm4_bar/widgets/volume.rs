@@ -1,18 +1,13 @@
 //! Volume widget. Subscribes to `hub::volume` and renders an icon + percent
-//! label. Click → opens a popover containing a horizontal slider, a mute
-//! toggle, and a sink-selection dropdown.
+//! label. Click → opens a popover with two sections (output / input), each
+//! with a slider, mute toggle, and device dropdown. Layout and slider styling
+//! follow the Noctalia shell aesthetic — minimal trough, small accent
+//! handle, generous breathing room between sections.
 //!
 //! The bar-line view follows the canonical pattern from `cpu_usage.rs`:
 //! cached SVG textures via `OnceLock`, model holds the GTK widgets, watch
 //! receiver bridged into component messages on the GTK main context, and
-//! `update` short-circuits when the displayed value is unchanged.
-//!
-//! The popover is built once in `init` and re-populated from each Update
-//! message: the slider is moved to the new percent, the mute toggle is
-//! re-checked, and the sink dropdown's `StringList` is rebuilt only when the
-//! set of sinks actually changes (a cheap structural compare). The slider's
-//! `value-changed` signal is gated behind a `RefCell<bool>` flag so calls
-//! that come from our own updates don't loop back into `set_volume`.
+//! `update` short-circuits when nothing visible changed.
 
 use std::cell::RefCell;
 use std::rc::Rc;
@@ -23,7 +18,7 @@ use relm4::prelude::*;
 
 use crate::relm4_bar::config;
 use crate::relm4_bar::hub;
-use crate::relm4_bar::hub::volume::{SinkInfo, VolumeState};
+use crate::relm4_bar::hub::volume::{DeviceInfo, VolumeState};
 
 use super::{NamedWidget, WidgetInit, capsule, capsule_interactive, set_exclusive_class};
 
@@ -31,6 +26,8 @@ const ICON_HIGH: &str = "volume-high-symbolic";
 const ICON_LOW: &str = "volume-low-symbolic";
 const ICON_MUTE: &str = "mute-symbolic";
 const ICON_UNMUTE: &str = "unmute-symbolic";
+const ICON_MIC_ON: &str = "mic-on-symbolic";
+const ICON_MIC_OFF: &str = "mic-off-symbolic";
 
 /// CSS classes for color states. `set_exclusive_class` strips the others
 /// before adding the chosen one, so stale classes can't accumulate.
@@ -41,7 +38,6 @@ const COLOR_CLASSES: &[&str] = &[
     "volume-high",
 ];
 
-/// Install a process-wide CssProvider once that defines the color classes.
 fn ensure_css() {
     static ONCE: OnceLock<()> = OnceLock::new();
     ONCE.get_or_init(|| {
@@ -63,8 +59,7 @@ fn ensure_css() {
     });
 }
 
-/// Map a `(percent, muted)` pair to the icon name + CSS class.
-fn icon_for(percent: u32, muted: bool) -> (&'static str, &'static str) {
+fn icon_for_output(percent: u32, muted: bool) -> (&'static str, &'static str) {
     if muted {
         (ICON_MUTE, "volume-muted")
     } else if percent == 0 {
@@ -78,28 +73,34 @@ fn icon_for(percent: u32, muted: bool) -> (&'static str, &'static str) {
     }
 }
 
+fn icon_for_mic(muted: bool) -> &'static str {
+    if muted { ICON_MIC_OFF } else { ICON_MIC_ON }
+}
+
+/// Holds all the popover-section widgets for one audio direction (output or
+/// input). Same shape — only the icon and command-API targets differ.
+struct DeviceSection {
+    icon: gtk::Image,
+    slider: gtk::Scale,
+    mute: gtk::ToggleButton,
+    pct: gtk::Label,
+    dropdown: gtk::DropDown,
+    dropdown_model: gtk::StringList,
+    dropdown_names: Rc<RefCell<Vec<String>>>,
+}
+
 pub struct Volume {
     grouped: bool,
-    /// Last-applied snapshot, kept for the displayed-value coalescing check.
     state: VolumeState,
-    /// Held so `update` can swap the paintable + class on volume changes.
-    icon: gtk::Image,
-    /// Held so `update` can rewrite the percent text.
-    label: gtk::Label,
-    /// Popover widgets. Mutated on every state update.
-    popover_slider: gtk::Scale,
-    popover_mute: gtk::ToggleButton,
-    popover_dropdown: gtk::DropDown,
-    /// String list backing the dropdown — rebuilt when sinks change.
-    popover_dropdown_model: gtk::StringList,
-    /// The `name`s corresponding to each entry in `popover_dropdown_model`,
-    /// in the same order. Used to map a dropdown selection back to a
-    /// `set_default_sink` call.
-    popover_dropdown_names: Rc<RefCell<Vec<String>>>,
-    /// Set to true while we're applying an external state update, so the
-    /// signal handlers know to skip pushing the change back through the
-    /// hub command API.
-    suppress_signals: Rc<RefCell<bool>>,
+    /// Bar-line icon + label.
+    bar_icon: gtk::Image,
+    bar_label: gtk::Label,
+    /// Popover sections.
+    out_section: DeviceSection,
+    in_section: DeviceSection,
+    /// Set to true while we're applying an external state update so the
+    /// signal handlers know to skip pushing the change back through the hub.
+    suppress: Rc<RefCell<bool>>,
 }
 
 #[derive(Debug)]
@@ -143,99 +144,53 @@ impl SimpleComponent for Volume {
         popover.add_css_class("volume-popover");
         popover.set_parent(&root);
 
-        let popover_box = gtk::Box::new(gtk::Orientation::Vertical, 8);
-        popover_box.set_margin_top(8);
-        popover_box.set_margin_bottom(8);
-        popover_box.set_margin_start(8);
-        popover_box.set_margin_end(8);
+        let popover_box = gtk::Box::new(gtk::Orientation::Vertical, 14);
+        popover_box.add_css_class("noctalia-section-box");
 
-        // Volume slider (0..=100, integer step).
-        let slider = gtk::Scale::with_range(gtk::Orientation::Horizontal, 0.0, 100.0, 1.0);
-        slider.set_width_request(220);
-        slider.set_hexpand(true);
-        slider.set_draw_value(true);
-        slider.set_value_pos(gtk::PositionType::Right);
-        popover_box.append(&slider);
+        let suppress = Rc::new(RefCell::new(false));
 
-        // Mute toggle.
-        let mute = gtk::ToggleButton::with_label("Mute");
-        mute.add_css_class("volume-mute-toggle");
-        popover_box.append(&mute);
+        let out_section = build_section(
+            &popover_box,
+            "Output",
+            ICON_HIGH,
+            "volume-output-section",
+            suppress.clone(),
+            VolumeChannel::Output,
+        );
 
-        // Sink selection dropdown — backed by a StringList we rebuild as the
-        // sink set changes.
-        let dropdown_model = gtk::StringList::new(&[]);
-        let dropdown = gtk::DropDown::builder()
-            .model(&dropdown_model)
-            .build();
-        popover_box.append(&dropdown);
+        // Visual divider between output and input.
+        let divider = gtk::Box::new(gtk::Orientation::Horizontal, 0);
+        divider.add_css_class("noctalia-divider");
+        divider.set_height_request(1);
+        popover_box.append(&divider);
+
+        let in_section = build_section(
+            &popover_box,
+            "Input",
+            ICON_MIC_ON,
+            "volume-input-section",
+            suppress.clone(),
+            VolumeChannel::Input,
+        );
 
         popover.set_child(Some(&popover_box));
 
         // ── Model ──────────────────────────────────────────────────────
         let model = Volume {
             grouped: init.grouped,
-            // `Default::default()` so the first Update message will always
-            // be applied (the seeded state.percent/muted differ from the
-            // hub's first publish in the typical case).
             state: VolumeState::default(),
-            icon: widgets.icon.clone(),
-            label: widgets.label.clone(),
-            popover_slider: slider.clone(),
-            popover_mute: mute.clone(),
-            popover_dropdown: dropdown.clone(),
-            popover_dropdown_model: dropdown_model.clone(),
-            popover_dropdown_names: Rc::new(RefCell::new(Vec::new())),
-            suppress_signals: Rc::new(RefCell::new(false)),
+            bar_icon: widgets.icon.clone(),
+            bar_label: widgets.label.clone(),
+            out_section,
+            in_section,
+            suppress,
         };
 
         capsule(&root, model.grouped);
         capsule_interactive(&root, model.grouped);
-        root.set_cursor_from_name(Some("pointer"));
 
-        // ── Signal wiring ──────────────────────────────────────────────
-        // Slider → set_volume (suppressed when we're applying an external
-        // update to avoid a feedback loop).
-        {
-            let suppress = model.suppress_signals.clone();
-            slider.connect_value_changed(move |s| {
-                if *suppress.borrow() {
-                    return;
-                }
-                hub::volume::set_volume(s.value().round() as u32);
-            });
-        }
-
-        // Mute toggle → toggle_mute. Same suppression flag.
-        {
-            let suppress = model.suppress_signals.clone();
-            mute.connect_toggled(move |_| {
-                if *suppress.borrow() {
-                    return;
-                }
-                hub::volume::toggle_mute();
-            });
-        }
-
-        // Dropdown → set_default_sink. We listen to `selected-item` rather
-        // than `selected` so we don't fire when the model is rebuilt to a
-        // different size.
-        {
-            let suppress = model.suppress_signals.clone();
-            let names = model.popover_dropdown_names.clone();
-            dropdown.connect_selected_notify(move |dd| {
-                if *suppress.borrow() {
-                    return;
-                }
-                let idx = dd.selected() as usize;
-                let name = names.borrow().get(idx).cloned();
-                if let Some(name) = name {
-                    hub::volume::set_default_sink(&name);
-                }
-            });
-        }
-
-        // Click on the bar widget → popup the popover.
+        // ── Bar-widget interactions ────────────────────────────────────
+        // Click → popup. Scroll → ±5% on output volume.
         {
             let popover = popover.clone();
             let click = gtk::GestureClick::new();
@@ -243,18 +198,14 @@ impl SimpleComponent for Volume {
             click.connect_pressed(move |_, _, _, _| popover.popup());
             root.add_controller(click);
         }
-
-        // Scroll-wheel over the bar widget → ±5% volume, like rs-bar.
         {
             let scroll = gtk::EventControllerScroll::new(
                 gtk::EventControllerScrollFlags::VERTICAL,
             );
             scroll.connect_scroll(move |_, _dx, dy| {
-                // dy < 0 means scroll up (away from user).
                 let cur_pct = {
                     let mut rx = hub::volume::subscribe();
-                    let s = rx.borrow_and_update().clone();
-                    s.percent
+                    rx.borrow_and_update().percent
                 };
                 let new_pct = if dy < 0.0 {
                     (cur_pct + 5).min(100)
@@ -267,7 +218,7 @@ impl SimpleComponent for Volume {
             root.add_controller(scroll);
         }
 
-        // ── Subscription ────────────────────────────────────────────────
+        // ── Hub subscription ───────────────────────────────────────────
         let mut rx = hub::volume::subscribe();
         let s = sender.clone();
         relm4::spawn_local(async move {
@@ -285,108 +236,237 @@ impl SimpleComponent for Volume {
     fn update(&mut self, msg: Self::Input, _sender: ComponentSender<Self>) {
         match msg {
             VolumeMsg::Update(new) => {
-                // Coalescing: skip GTK writes when nothing visible changed.
-                let icon_changed = {
-                    let (name_old, _) = icon_for(self.state.percent, self.state.muted);
-                    let (name_new, _) = icon_for(new.percent, new.muted);
-                    !std::ptr::eq(name_old, name_new)
-                };
-                let pct_changed = self.state.percent != new.percent;
-                let muted_changed = self.state.muted != new.muted;
-                let default_changed = self.state.default_sink != new.default_sink;
-                let sinks_changed = !sinks_equal(&self.state.sinks, &new.sinks);
+                *self.suppress.borrow_mut() = true;
 
-                if !icon_changed
-                    && !pct_changed
-                    && !muted_changed
-                    && !default_changed
-                    && !sinks_changed
-                {
-                    return;
-                }
+                // ── Bar line (output side only) ─────────────────────────
+                let (name, class) = icon_for_output(new.percent, new.muted);
+                self.bar_icon.set_icon_name(Some(name));
+                set_exclusive_class(&self.bar_icon, class, COLOR_CLASSES);
+                set_exclusive_class(&self.bar_label, class, COLOR_CLASSES);
+                self.bar_label
+                    .set_label(&format!("{:>3}%", new.percent.min(999)));
 
-                // Suppress signal handlers while we mutate the popover
-                // controls so they don't bounce changes back through the
-                // hub command API.
-                *self.suppress_signals.borrow_mut() = true;
+                // ── Output section ──────────────────────────────────────
+                apply_to_section(
+                    &self.out_section,
+                    new.percent,
+                    new.muted,
+                    icon_for_output(new.percent, new.muted).0,
+                    &new.default_sink,
+                    &new.sinks,
+                );
 
-                if icon_changed || muted_changed || pct_changed {
-                    let (name, class) = icon_for(new.percent, new.muted);
-                    self.icon.set_icon_name(Some(name));
-                    set_exclusive_class(&self.icon, class, COLOR_CLASSES);
-                    set_exclusive_class(&self.label, class, COLOR_CLASSES);
-                    self.label.set_label(&format!("{:>3}%", new.percent.min(999)));
-                }
-
-                if pct_changed {
-                    let target = new.percent.min(100) as f64;
-                    if (self.popover_slider.value() - target).abs() > f64::EPSILON {
-                        self.popover_slider.set_value(target);
-                    }
-                }
-
-                if muted_changed && self.popover_mute.is_active() != new.muted {
-                    self.popover_mute.set_active(new.muted);
-                }
-
-                if sinks_changed {
-                    rebuild_dropdown_model(
-                        &self.popover_dropdown_model,
-                        &self.popover_dropdown_names,
-                        &new.sinks,
-                    );
-                }
-
-                if sinks_changed || default_changed {
-                    // Move the dropdown selection to the new default sink.
-                    if let Some(idx) = self
-                        .popover_dropdown_names
-                        .borrow()
-                        .iter()
-                        .position(|n| n == &new.default_sink)
-                    {
-                        if self.popover_dropdown.selected() != idx as u32 {
-                            self.popover_dropdown.set_selected(idx as u32);
-                        }
-                    }
-                }
+                // ── Input section ───────────────────────────────────────
+                apply_to_section(
+                    &self.in_section,
+                    new.mic_percent,
+                    new.mic_muted,
+                    icon_for_mic(new.mic_muted),
+                    &new.default_source,
+                    &new.sources,
+                );
 
                 self.state = new;
-                *self.suppress_signals.borrow_mut() = false;
+                *self.suppress.borrow_mut() = false;
             }
+        }
+    }
+}
+
+/// Which side of the audio plumbing a `DeviceSection` controls.
+#[derive(Clone, Copy)]
+enum VolumeChannel {
+    Output,
+    Input,
+}
+
+impl VolumeChannel {
+    fn set_volume(self, pct: u32) {
+        match self {
+            VolumeChannel::Output => hub::volume::set_volume(pct),
+            VolumeChannel::Input => hub::volume::set_mic_volume(pct),
+        }
+    }
+    fn toggle_mute(self) {
+        match self {
+            VolumeChannel::Output => hub::volume::toggle_mute(),
+            VolumeChannel::Input => hub::volume::toggle_mic_mute(),
+        }
+    }
+    fn set_default(self, name: &str) {
+        match self {
+            VolumeChannel::Output => hub::volume::set_default_sink(name),
+            VolumeChannel::Input => hub::volume::set_default_source(name),
+        }
+    }
+}
+
+/// Build one device section (header + slider row + dropdown), append it to
+/// `parent`, wire up its signal handlers, and return the held widgets.
+fn build_section(
+    parent: &gtk::Box,
+    title: &str,
+    initial_icon: &str,
+    css_class: &str,
+    suppress: Rc<RefCell<bool>>,
+    channel: VolumeChannel,
+) -> DeviceSection {
+    let section = gtk::Box::new(gtk::Orientation::Vertical, 8);
+    section.add_css_class(css_class);
+    section.add_css_class("noctalia-section");
+
+    // Header: small label like "OUTPUT" — Noctalia uses uppercase tracking.
+    let header = gtk::Label::new(Some(&title.to_uppercase()));
+    header.set_xalign(0.0);
+    header.add_css_class("noctalia-section-header");
+    section.append(&header);
+
+    // Row: icon, slider, percent label, mute button.
+    let row = gtk::Box::new(gtk::Orientation::Horizontal, 8);
+
+    let icon = gtk::Image::builder()
+        .icon_name(initial_icon)
+        .pixel_size(16)
+        .build();
+    row.append(&icon);
+
+    let slider = gtk::Scale::with_range(gtk::Orientation::Horizontal, 0.0, 100.0, 1.0);
+    slider.set_width_request(220);
+    slider.set_hexpand(true);
+    slider.set_draw_value(false);
+    slider.add_css_class("noctalia-slider");
+    row.append(&slider);
+
+    let pct = gtk::Label::new(Some("  0%"));
+    pct.add_css_class("noctalia-pct");
+    pct.set_width_chars(4);
+    pct.set_xalign(1.0);
+    row.append(&pct);
+
+    let mute = gtk::ToggleButton::new();
+    mute.set_child(Some(&gtk::Image::from_icon_name(initial_icon)));
+    mute.add_css_class("noctalia-mute");
+    mute.set_tooltip_text(Some("Toggle mute"));
+    row.append(&mute);
+
+    section.append(&row);
+
+    // Dropdown for the device list.
+    let dropdown_model = gtk::StringList::new(&[]);
+    let dropdown = gtk::DropDown::builder()
+        .model(&dropdown_model)
+        .build();
+    dropdown.add_css_class("noctalia-dropdown");
+    section.append(&dropdown);
+
+    parent.append(&section);
+
+    let dropdown_names: Rc<RefCell<Vec<String>>> = Rc::new(RefCell::new(Vec::new()));
+
+    // Wire signals.
+    {
+        let suppress = suppress.clone();
+        let pct_label = pct.clone();
+        slider.connect_value_changed(move |s| {
+            let v = s.value().round() as u32;
+            // Always update the inline pct text so dragging feels live.
+            pct_label.set_label(&format!("{:>3}%", v.min(999)));
+            if *suppress.borrow() {
+                return;
+            }
+            channel.set_volume(v);
+        });
+    }
+    {
+        let suppress = suppress.clone();
+        mute.connect_toggled(move |_| {
+            if *suppress.borrow() {
+                return;
+            }
+            channel.toggle_mute();
+        });
+    }
+    {
+        let suppress = suppress.clone();
+        let names = dropdown_names.clone();
+        dropdown.connect_selected_notify(move |dd| {
+            if *suppress.borrow() {
+                return;
+            }
+            let idx = dd.selected() as usize;
+            let name = names.borrow().get(idx).cloned();
+            if let Some(name) = name {
+                channel.set_default(&name);
+            }
+        });
+    }
+
+    DeviceSection {
+        icon,
+        slider,
+        mute,
+        pct,
+        dropdown,
+        dropdown_model,
+        dropdown_names,
+    }
+}
+
+/// Apply a `(percent, muted, icon_name, default_name, devices)` snapshot to
+/// a section's widgets without firing the signal handlers (caller must hold
+/// `suppress = true`).
+fn apply_to_section(
+    s: &DeviceSection,
+    percent: u32,
+    muted: bool,
+    icon_name: &str,
+    default_name: &str,
+    devices: &[DeviceInfo],
+) {
+    s.icon.set_icon_name(Some(icon_name));
+    if let Some(child) = s.mute.child() {
+        if let Ok(image) = child.downcast::<gtk::Image>() {
+            image.set_icon_name(Some(icon_name));
+        }
+    }
+
+    let target = percent.min(100) as f64;
+    if (s.slider.value() - target).abs() > f64::EPSILON {
+        s.slider.set_value(target);
+    }
+    s.pct.set_label(&format!("{:>3}%", percent.min(999)));
+
+    if s.mute.is_active() != muted {
+        s.mute.set_active(muted);
+    }
+
+    // Rebuild dropdown only if the device list changed.
+    let need_rebuild = {
+        let names = s.dropdown_names.borrow();
+        names.len() != devices.len()
+            || names.iter().zip(devices.iter()).any(|(n, d)| n != &d.name)
+    };
+    if need_rebuild {
+        let mut names_mut = s.dropdown_names.borrow_mut();
+        let old_len = names_mut.len() as u32;
+        let descriptions: Vec<&str> = devices.iter().map(|d| d.description.as_str()).collect();
+        s.dropdown_model.splice(0, old_len, &descriptions);
+        names_mut.clear();
+        names_mut.extend(devices.iter().map(|d| d.name.clone()));
+    }
+
+    if let Some(idx) = s
+        .dropdown_names
+        .borrow()
+        .iter()
+        .position(|n| n == default_name)
+    {
+        if s.dropdown.selected() != idx as u32 {
+            s.dropdown.set_selected(idx as u32);
         }
     }
 }
 
 impl NamedWidget for Volume {
     const NAME: &'static str = "volume";
-}
-
-/// Cheap structural compare on the sink list. The hub already coalesces
-/// identical states, but we re-check on the widget side because the UI
-/// rebuild (StringList replacement) is more expensive than the comparison.
-fn sinks_equal(a: &[SinkInfo], b: &[SinkInfo]) -> bool {
-    if a.len() != b.len() {
-        return false;
-    }
-    a.iter()
-        .zip(b.iter())
-        .all(|(x, y)| x.name == y.name && x.description == y.description)
-}
-
-/// Replace every entry in `model` with descriptions from `sinks`, and
-/// mirror the ordering into `names`. Uses `splice(0, old_len, new)` for an
-/// atomic "clear and replace" — the dropdown will reset its `selected`
-/// index after this, which the caller then re-points at the new default.
-fn rebuild_dropdown_model(
-    model: &gtk::StringList,
-    names: &Rc<RefCell<Vec<String>>>,
-    sinks: &[SinkInfo],
-) {
-    let mut names_mut = names.borrow_mut();
-    let old_len = names_mut.len() as u32;
-    let descriptions: Vec<&str> = sinks.iter().map(|s| s.description.as_str()).collect();
-    model.splice(0, old_len, &descriptions);
-    names_mut.clear();
-    names_mut.extend(sinks.iter().map(|s| s.name.clone()));
 }
