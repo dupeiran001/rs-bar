@@ -6,6 +6,7 @@ use std::path::PathBuf;
 use gdk::Display;
 
 use crate::relm4_bar::config;
+use crate::relm4_bar::theme::tokens;
 
 const DEFAULT_CSS: &str = include_str!("../../assets/default-theme.css");
 
@@ -88,6 +89,11 @@ pub fn load() {
         css.push('\n');
         css.push_str(&user);
     }
+
+    // Substitute non-color design tokens (`@RS_RADIUS_*`, `@RS_SPACING_*`,
+    // `@RS_ANIM_*`, …). Done after the user override is appended so users
+    // can author overrides using the same token names.
+    tokens::apply_tokens(&mut css);
 
     let provider = gtk::CssProvider::new();
     provider.load_from_string(&css);

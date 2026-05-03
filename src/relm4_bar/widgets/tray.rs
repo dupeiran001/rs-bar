@@ -30,7 +30,7 @@ use crate::relm4_bar::config;
 use crate::relm4_bar::hub;
 use crate::relm4_bar::hub::tray::{TrayItem, TrayMenuEntry, TrayState};
 
-use super::{NamedWidget, WidgetInit, capsule};
+use super::{NamedWidget, WidgetInit, capsule, popover};
 
 /// Per-icon UI state retained across updates so we can reuse GTK widgets
 /// when only metadata (e.g. tooltip text) changes.
@@ -233,6 +233,9 @@ fn build_slot(item: &TrayItem) -> IconSlot {
     let popover = gtk::PopoverMenu::from_model(None::<&gio::Menu>);
     popover.set_parent(&button);
     popover.set_has_arrow(false);
+    popover.set_offset(0, 0);
+    popover.add_css_class("tray-popover");
+    popover::install_motion(&popover);
 
     let action_group = gio::SimpleActionGroup::new();
     button.insert_action_group("tray", Some(&action_group));
@@ -261,7 +264,7 @@ fn build_slot(item: &TrayItem) -> IconSlot {
         // allows the server to act on either Secondary or the menu —
         // we surface both.
         hub::tray::secondary(&id_for_right, 0, 0);
-        popover_for_right.popup();
+        popover::toggle(&popover_for_right);
     });
     button.add_controller(right);
 
@@ -365,7 +368,7 @@ fn rebuild_menu(slot: &mut IconSlot, item: &TrayItem) {
 
     if item.menu.is_empty() {
         // No menu → close (if open) and replace with empty model.
-        slot.popover.popdown();
+        popover::popdown(&slot.popover);
         slot.popover
             .set_menu_model(Some(&gio::Menu::new()));
         return;

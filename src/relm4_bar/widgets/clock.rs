@@ -18,7 +18,7 @@ use chrono::Local;
 use gtk::prelude::*;
 use relm4::prelude::*;
 
-use super::{NamedWidget, WidgetInit, capsule, capsule_interactive};
+use super::{NamedWidget, WidgetInit, capsule, capsule_interactive, popover};
 
 fn format_time() -> String {
     Local::now().format("%H:%M").to_string()
@@ -106,6 +106,7 @@ impl SimpleComponent for Clock {
         let popover = gtk::Popover::builder().autohide(true).build();
         popover.add_css_class("clock-popover");
         popover.set_parent(&root);
+        popover::install_motion(&popover);
 
         let popover_box = gtk::Box::new(gtk::Orientation::Vertical, 6);
 
@@ -120,7 +121,7 @@ impl SimpleComponent for Clock {
         let calendar = gtk::Calendar::new();
         popover_box.append(&calendar);
 
-        popover.set_child(Some(&popover_box));
+        popover::set_liquid_child(&popover, &popover_box);
 
         // 1Hz timer for the popover seconds label, alive only while shown.
         // SourceId is !Send and !Sync; keep it inside an Rc<RefCell<…>> so the
@@ -163,7 +164,7 @@ impl SimpleComponent for Clock {
         // Click → open popover. Use GestureClick on the root box.
         let click = gtk::GestureClick::new();
         let popover_for_click = popover.clone();
-        click.connect_pressed(move |_, _, _, _| popover_for_click.popup());
+        click.connect_pressed(move |_, _, _, _| popover::toggle(&popover_for_click));
         root.add_controller(click);
 
         ComponentParts { model, widgets }

@@ -16,7 +16,10 @@ use relm4::prelude::*;
 
 use crate::relm4_bar::config;
 use crate::relm4_bar::hub;
+use crate::subscribe_into_msg;
 
+use super::popover::BarPopover;
+use super::util::SuppressGuard;
 use super::{NamedWidget, WidgetInit, capsule, capsule_interactive, set_exclusive_class};
 
 const ICON_HIGH: &str = "brightness-high-symbolic";
@@ -86,11 +89,7 @@ impl SimpleComponent for Brightness {
     ) -> ComponentParts<Self> {
         let widgets = view_output!();
 
-        // ── Popover scaffolding ────────────────────────────────────────
-        let popover = gtk::Popover::builder().autohide(true).build();
-        popover.add_css_class("brightness-popover");
-        popover.set_parent(&root);
-
+        // ── Popover content ────────────────────────────────────────────
         let popover_box = gtk::Box::new(gtk::Orientation::Vertical, 8);
         popover_box.set_margin_top(8);
         popover_box.set_margin_bottom(8);
@@ -104,7 +103,7 @@ impl SimpleComponent for Brightness {
         slider.set_value_pos(gtk::PositionType::Right);
         popover_box.append(&slider);
 
-        popover.set_child(Some(&popover_box));
+        let popover = BarPopover::builder(&root, "brightness-popover").build(&popover_box);
 
         // ── Model ──────────────────────────────────────────────────────
         let model = Brightness {
@@ -151,13 +150,7 @@ impl SimpleComponent for Brightness {
         }
 
         // Click on the bar widget → popup the popover.
-        {
-            let popover = popover.clone();
-            let click = gtk::GestureClick::new();
-            click.set_button(gtk::gdk::BUTTON_PRIMARY);
-            click.connect_pressed(move |_, _, _, _| popover.popup());
-            root.add_controller(click);
-        }
+        popover.attach_click(&root);
 
         // Scroll-wheel over the bar widget → bump up/down. Each scroll tick
         // issues exactly one BRIGHTNESS_UP/DOWN_CMD() invocation; the
@@ -178,16 +171,7 @@ impl SimpleComponent for Brightness {
         }
 
         // ── Subscription ────────────────────────────────────────────────
-        let mut rx = hub::brightness::subscribe();
-        let s = sender.clone();
-        relm4::spawn_local(async move {
-            let initial = *rx.borrow_and_update();
-            s.input(BrightnessMsg::Update(initial));
-            while rx.changed().await.is_ok() {
-                let v = *rx.borrow_and_update();
-                s.input(BrightnessMsg::Update(v));
-            }
-        });
+        subscribe_into_msg!(hub::brightness::subscribe(), sender, BrightnessMsg::Update);
 
         ComponentParts { model, widgets }
     }
@@ -209,7 +193,7 @@ impl SimpleComponent for Brightness {
                 // Suppress signal handlers while we mutate the slider so it
                 // doesn't bounce a fake "user moved the slider" change back
                 // through the hub command API.
-                *self.suppress_signals.borrow_mut() = true;
+                let _suppress = SuppressGuard::new(&self.suppress_signals);
 
                 if icon_changed || pct_changed {
                     let (name, class) = icon_for(new);
@@ -227,7 +211,6 @@ impl SimpleComponent for Brightness {
                 }
 
                 self.percent = new;
-                *self.suppress_signals.borrow_mut() = false;
             }
         }
     }

@@ -22,7 +22,9 @@ use relm4::prelude::*;
 use crate::relm4_bar::config;
 use crate::relm4_bar::hub;
 use crate::relm4_bar::hub::wifi::{KnownNetwork, WifiState};
+use crate::subscribe_into_msg;
 
+use super::popover::{self, BarPopover};
 use super::{NamedWidget, WidgetInit, capsule, capsule_interactive, set_exclusive_class};
 
 // ── symbolic icon names (one per signal band) ───────────────────────────
@@ -163,11 +165,7 @@ impl SimpleComponent for Wifi {
     ) -> ComponentParts<Self> {
         let widgets = view_output!();
 
-        // ── popover scaffolding ──
-        let popover = gtk::Popover::builder().autohide(true).build();
-        popover.add_css_class("wifi-popover");
-        popover.set_parent(&root);
-
+        // ── popover content ──
         let popover_box = gtk::Box::new(gtk::Orientation::Vertical, 6);
         popover_box.set_margin_top(8);
         popover_box.set_margin_bottom(8);
@@ -212,14 +210,9 @@ impl SimpleComponent for Wifi {
         scroll.set_child(Some(&list_box));
         popover_box.append(&scroll);
 
-        popover.set_child(Some(&popover_box));
-
-        // Click on the bar widget → open popover. Use GestureClick on root.
-        let click = gtk::GestureClick::new();
-        click.set_button(gtk::gdk::BUTTON_PRIMARY);
-        let p = popover.clone();
-        click.connect_pressed(move |_, _, _, _| p.popup());
-        root.add_controller(click);
+        let bar_popover = BarPopover::builder(&root, "wifi-popover").build(&popover_box);
+        bar_popover.attach_click(&root);
+        let popover = bar_popover.popover.clone();
         root.set_cursor_from_name(Some("pointer"));
 
         // Disconnect button visibility tracking via field on the model below;
@@ -244,17 +237,7 @@ impl SimpleComponent for Wifi {
         capsule_interactive(&root, model.grouped);
 
         // Subscription: bridge the watch::Receiver<WifiState> into messages.
-        let mut rx = hub::wifi::subscribe();
-        let s = sender.clone();
-        relm4::spawn_local(async move {
-            // Apply the current value immediately, then await further changes.
-            let initial = rx.borrow_and_update().clone();
-            s.input(WifiMsg::Update(initial));
-            while rx.changed().await.is_ok() {
-                let v = rx.borrow_and_update().clone();
-                s.input(WifiMsg::Update(v));
-            }
-        });
+        subscribe_into_msg!(hub::wifi::subscribe(), sender, WifiMsg::Update);
 
         ComponentParts { model, widgets }
     }
@@ -294,11 +277,11 @@ impl SimpleComponent for Wifi {
             }
             WifiMsg::Connect(ssid) => {
                 hub::wifi::connect(&ssid);
-                self.popover.popdown();
+                popover::popdown(&self.popover);
             }
             WifiMsg::Disconnect => {
                 hub::wifi::disconnect();
-                self.popover.popdown();
+                popover::popdown(&self.popover);
             }
             WifiMsg::Refresh => {
                 hub::wifi::refresh();

@@ -12,6 +12,7 @@
 use std::cell::RefCell;
 use std::rc::Rc;
 use std::sync::OnceLock;
+use std::time::Duration;
 
 use gtk::prelude::*;
 use relm4::prelude::*;
@@ -19,7 +20,10 @@ use relm4::prelude::*;
 use crate::relm4_bar::config;
 use crate::relm4_bar::hub;
 use crate::relm4_bar::hub::volume::{DeviceInfo, VolumeState};
+use crate::subscribe_into_msg;
 
+use super::popover::BarPopover;
+use super::util::SuppressGuard;
 use super::{NamedWidget, WidgetInit, capsule, capsule_interactive, set_exclusive_class};
 
 const ICON_HIGH: &str = "volume-high-symbolic";
@@ -87,6 +91,13 @@ struct DeviceSection {
     dropdown: gtk::DropDown,
     dropdown_model: gtk::StringList,
     dropdown_names: Rc<RefCell<Vec<String>>>,
+    /// True for ~150 ms after the last user-driven slider change. While
+    /// true, hub-driven `slider.set_value(...)` writes from `update()` are
+    /// skipped — without that, intermediate states published by the audio
+    /// hub during a drag yank the slider back to stale values, which
+    /// reads as "bouncing." The flag auto-clears on a debounced timer
+    /// refreshed by every new `change-value` signal from the user.
+    user_dragging: Rc<RefCell<bool>>,
 }
 
 pub struct Volume {
@@ -139,24 +150,20 @@ impl SimpleComponent for Volume {
         ensure_css();
         let widgets = view_output!();
 
-        // ── Popover scaffolding ────────────────────────────────────────
-        let popover = gtk::Popover::builder().autohide(true).build();
-        popover.add_css_class("volume-popover");
-        popover.set_parent(&root);
-
+        // ── Popover content ────────────────────────────────────────────
         let popover_box = gtk::Box::new(gtk::Orientation::Vertical, 14);
         popover_box.add_css_class("noctalia-section-box");
 
         let suppress = Rc::new(RefCell::new(false));
 
-        let out_section = build_section(
-            &popover_box,
+        let (out_section, out_box) = build_section(
             "Output",
             ICON_HIGH,
             "volume-output-section",
             suppress.clone(),
             VolumeChannel::Output,
         );
+        popover_box.append(&out_box);
 
         // Visual divider between output and input.
         let divider = gtk::Box::new(gtk::Orientation::Horizontal, 0);
@@ -164,16 +171,16 @@ impl SimpleComponent for Volume {
         divider.set_height_request(1);
         popover_box.append(&divider);
 
-        let in_section = build_section(
-            &popover_box,
+        let (in_section, in_box) = build_section(
             "Input",
             ICON_MIC_ON,
             "volume-input-section",
             suppress.clone(),
             VolumeChannel::Input,
         );
+        popover_box.append(&in_box);
 
-        popover.set_child(Some(&popover_box));
+        let popover = BarPopover::builder(&root, "volume-popover").build(&popover_box);
 
         // ── Model ──────────────────────────────────────────────────────
         let model = Volume {
@@ -191,13 +198,7 @@ impl SimpleComponent for Volume {
 
         // ── Bar-widget interactions ────────────────────────────────────
         // Click → popup. Scroll → ±5% on output volume.
-        {
-            let popover = popover.clone();
-            let click = gtk::GestureClick::new();
-            click.set_button(gtk::gdk::BUTTON_PRIMARY);
-            click.connect_pressed(move |_, _, _, _| popover.popup());
-            root.add_controller(click);
-        }
+        popover.attach_click(&root);
         {
             let scroll = gtk::EventControllerScroll::new(
                 gtk::EventControllerScrollFlags::VERTICAL,
@@ -219,16 +220,7 @@ impl SimpleComponent for Volume {
         }
 
         // ── Hub subscription ───────────────────────────────────────────
-        let mut rx = hub::volume::subscribe();
-        let s = sender.clone();
-        relm4::spawn_local(async move {
-            let initial = rx.borrow_and_update().clone();
-            s.input(VolumeMsg::Update(initial));
-            while rx.changed().await.is_ok() {
-                let v = rx.borrow_and_update().clone();
-                s.input(VolumeMsg::Update(v));
-            }
-        });
+        subscribe_into_msg!(hub::volume::subscribe(), sender, VolumeMsg::Update);
 
         ComponentParts { model, widgets }
     }
@@ -236,7 +228,7 @@ impl SimpleComponent for Volume {
     fn update(&mut self, msg: Self::Input, _sender: ComponentSender<Self>) {
         match msg {
             VolumeMsg::Update(new) => {
-                *self.suppress.borrow_mut() = true;
+                let _suppress = SuppressGuard::new(&self.suppress);
 
                 // ── Bar line (output side only) ─────────────────────────
                 let (name, class) = icon_for_output(new.percent, new.muted);
@@ -267,7 +259,6 @@ impl SimpleComponent for Volume {
                 );
 
                 self.state = new;
-                *self.suppress.borrow_mut() = false;
             }
         }
     }
@@ -301,16 +292,16 @@ impl VolumeChannel {
     }
 }
 
-/// Build one device section (header + slider row + dropdown), append it to
-/// `parent`, wire up its signal handlers, and return the held widgets.
+/// Build one device section (header + slider row + dropdown), wire up its
+/// signal handlers, and return the held widgets together with the outer
+/// section `gtk::Box` so the caller can wrap it in a `Revealer`.
 fn build_section(
-    parent: &gtk::Box,
     title: &str,
     initial_icon: &str,
     css_class: &str,
     suppress: Rc<RefCell<bool>>,
     channel: VolumeChannel,
-) -> DeviceSection {
+) -> (DeviceSection, gtk::Box) {
     let section = gtk::Box::new(gtk::Orientation::Vertical, 8);
     section.add_css_class(css_class);
     section.add_css_class("noctalia-section");
@@ -321,14 +312,21 @@ fn build_section(
     header.add_css_class("noctalia-section-header");
     section.append(&header);
 
-    // Row: icon, slider, percent label, mute button.
+    // Row: [mute toggle (icon)] [slider] [percent].
+    // The icon doubles as the mute button — clicking the icon flips mute,
+    // which also flips the icon (volume-* ↔ mute-symbolic) so the same
+    // glyph is both indicator and control. One affordance instead of two.
     let row = gtk::Box::new(gtk::Orientation::Horizontal, 8);
 
     let icon = gtk::Image::builder()
         .icon_name(initial_icon)
         .pixel_size(16)
         .build();
-    row.append(&icon);
+    let mute = gtk::ToggleButton::new();
+    mute.set_child(Some(&icon));
+    mute.add_css_class("noctalia-mute");
+    mute.set_tooltip_text(Some("Toggle mute"));
+    row.append(&mute);
 
     let slider = gtk::Scale::with_range(gtk::Orientation::Horizontal, 0.0, 100.0, 1.0);
     slider.set_width_request(220);
@@ -343,12 +341,6 @@ fn build_section(
     pct.set_xalign(1.0);
     row.append(&pct);
 
-    let mute = gtk::ToggleButton::new();
-    mute.set_child(Some(&gtk::Image::from_icon_name(initial_icon)));
-    mute.add_css_class("noctalia-mute");
-    mute.set_tooltip_text(Some("Toggle mute"));
-    row.append(&mute);
-
     section.append(&row);
 
     // Dropdown for the device list.
@@ -359,14 +351,27 @@ fn build_section(
     dropdown.add_css_class("noctalia-dropdown");
     section.append(&dropdown);
 
-    parent.append(&section);
-
     let dropdown_names: Rc<RefCell<Vec<String>>> = Rc::new(RefCell::new(Vec::new()));
+
+    // Drag-tracking flag: stays true while the user is actively interacting
+    // with the slider, auto-clears 150 ms after the last user input. Owned
+    // by the section so apply_to_section can read it.
+    let user_dragging: Rc<RefCell<bool>> = Rc::new(RefCell::new(false));
+    // Pending GSourceIds for the auto-clear timer and the debounced
+    // set_volume call. Each new event cancels the previous timer and
+    // schedules a fresh one (last-write-wins).
+    let pending_release: Rc<RefCell<Option<glib::SourceId>>> =
+        Rc::new(RefCell::new(None));
+    let pending_send: Rc<RefCell<Option<glib::SourceId>>> =
+        Rc::new(RefCell::new(None));
 
     // Wire signals.
     {
         let suppress = suppress.clone();
         let pct_label = pct.clone();
+        let user_dragging = user_dragging.clone();
+        let pending_release = pending_release.clone();
+        let pending_send = pending_send.clone();
         slider.connect_value_changed(move |s| {
             let v = s.value().round() as u32;
             // Always update the inline pct text so dragging feels live.
@@ -374,7 +379,41 @@ fn build_section(
             if *suppress.borrow() {
                 return;
             }
-            channel.set_volume(v);
+
+            // Mark the slider as user-driven and refresh the auto-clear
+            // timer. While this flag is true, apply_to_section won't
+            // overwrite the slider position from hub publishes.
+            *user_dragging.borrow_mut() = true;
+            if let Some(prev) = pending_release.borrow_mut().take() {
+                prev.remove();
+            }
+            let user_dragging_clear = user_dragging.clone();
+            let pending_release_clear = pending_release.clone();
+            let release_id = glib::timeout_add_local_once(
+                Duration::from_millis(150),
+                move || {
+                    *user_dragging_clear.borrow_mut() = false;
+                    *pending_release_clear.borrow_mut() = None;
+                },
+            );
+            *pending_release.borrow_mut() = Some(release_id);
+
+            // Debounce the actual set_volume call. Each new value-change
+            // cancels the prior pending send and schedules a fresh one
+            // 30 ms out — turns a 60 Hz drag into ~33 wpctl calls/sec
+            // and ensures only the final value lands when drag stops.
+            if let Some(prev) = pending_send.borrow_mut().take() {
+                prev.remove();
+            }
+            let pending_send_clear = pending_send.clone();
+            let send_id = glib::timeout_add_local_once(
+                Duration::from_millis(30),
+                move || {
+                    channel.set_volume(v);
+                    *pending_send_clear.borrow_mut() = None;
+                },
+            );
+            *pending_send.borrow_mut() = Some(send_id);
         });
     }
     {
@@ -401,7 +440,7 @@ fn build_section(
         });
     }
 
-    DeviceSection {
+    let device_section = DeviceSection {
         icon,
         slider,
         mute,
@@ -409,7 +448,9 @@ fn build_section(
         dropdown,
         dropdown_model,
         dropdown_names,
-    }
+        user_dragging,
+    };
+    (device_section, section)
 }
 
 /// Apply a `(percent, muted, icon_name, default_name, devices)` snapshot to
@@ -423,15 +464,20 @@ fn apply_to_section(
     default_name: &str,
     devices: &[DeviceInfo],
 ) {
+    // The icon lives inside the mute toggle now, so a single set_icon_name
+    // updates both the indicator and the button label.
     s.icon.set_icon_name(Some(icon_name));
-    if let Some(child) = s.mute.child() {
-        if let Ok(image) = child.downcast::<gtk::Image>() {
-            image.set_icon_name(Some(icon_name));
-        }
-    }
 
+    // Skip slider position writes while the user is actively dragging — the
+    // hub publishes intermediate states as wpctl/pactl propagate, and
+    // snapping the slider back to a stale value mid-drag is what made the
+    // audio panel feel jittery. The flag is maintained by the slider's
+    // change-value handler with a 150 ms auto-clear timer; it stays true
+    // continuously through a drag and clears shortly after the user stops.
+    // The percent label still updates so the drag-time number stays current.
+    let user_dragging = *s.user_dragging.borrow();
     let target = percent.min(100) as f64;
-    if (s.slider.value() - target).abs() > f64::EPSILON {
+    if !user_dragging && (s.slider.value() - target).abs() > f64::EPSILON {
         s.slider.set_value(target);
     }
     s.pct.set_label(&format!("{:>3}%", percent.min(999)));

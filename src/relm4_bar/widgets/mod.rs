@@ -25,6 +25,9 @@ pub fn current_connector() -> Option<String> {
     BAR_CTX.with(|c| c.borrow().as_ref().map(|x| x.connector.clone()))
 }
 
+pub mod popover;
+pub mod util;
+
 mod battery;
 mod battery_draw;
 mod bluetooth;

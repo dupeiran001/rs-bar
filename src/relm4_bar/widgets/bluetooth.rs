@@ -11,7 +11,10 @@ use relm4::prelude::*;
 use crate::relm4_bar::config;
 use crate::relm4_bar::hub;
 use crate::relm4_bar::hub::bluetooth::{BluetoothState, DeviceInfo};
+use crate::subscribe_into_msg;
 
+use super::popover::BarPopover;
+use super::util::SuppressGuard;
 use super::{NamedWidget, WidgetInit, capsule_icon, capsule_interactive, set_exclusive_class};
 
 const ICON_OFF: &str = "bluetooth-off-symbolic";
@@ -107,11 +110,7 @@ impl SimpleComponent for Bluetooth {
     ) -> ComponentParts<Self> {
         let widgets = view_output!();
 
-        // ── Popover scaffolding ────────────────────────────────────────
-        let popover = gtk::Popover::builder().autohide(true).build();
-        popover.add_css_class("bluetooth-popover");
-        popover.set_parent(&root);
-
+        // ── Popover content ────────────────────────────────────────────
         let popover_box = gtk::Box::new(gtk::Orientation::Vertical, 6);
 
         // Header row: title + power switch.
@@ -132,13 +131,8 @@ impl SimpleComponent for Bluetooth {
         list_box.add_css_class("bluetooth-device-list");
         popover_box.append(&list_box);
 
-        popover.set_child(Some(&popover_box));
-
-        // Click → open popover.
-        let click = gtk::GestureClick::new();
-        let popover_for_click = popover.clone();
-        click.connect_pressed(move |_, _, _, _| popover_for_click.popup());
-        root.add_controller(click);
+        let popover = BarPopover::builder(&root, "bluetooth-popover").build(&popover_box);
+        popover.attach_click(&root);
 
         // Power switch handler. We have to both react to user toggles and
         // sync the switch when external state changes (e.g. someone runs
@@ -173,19 +167,7 @@ impl SimpleComponent for Bluetooth {
         set_exclusive_class(&model.icon, model.icon_state.class(), STATE_CLASSES);
 
         // Subscription: bridge the watch::Receiver<BluetoothState> into messages.
-        let mut rx = hub::bluetooth::subscribe();
-        let s = sender.clone();
-        relm4::spawn_local(async move {
-            // Push the initial value, then react to every change. The
-            // explicit `(*…).clone()` clones the inner value rather than the
-            // `Ref`-style guard.
-            let initial = (*rx.borrow_and_update()).clone();
-            s.input(BluetoothMsg::Update(initial));
-            while rx.changed().await.is_ok() {
-                let v = (*rx.borrow_and_update()).clone();
-                s.input(BluetoothMsg::Update(v));
-            }
-        });
+        subscribe_into_msg!(hub::bluetooth::subscribe(), sender, BluetoothMsg::Update);
 
         ComponentParts { model, widgets }
     }
@@ -205,9 +187,8 @@ impl SimpleComponent for Bluetooth {
 
                 // Sync the power switch without triggering its handler.
                 {
-                    *self.suppress_switch.borrow_mut() = true;
+                    let _suppress = SuppressGuard::new(&self.suppress_switch);
                     self.power_switch.set_active(state.powered);
-                    *self.suppress_switch.borrow_mut() = false;
                 }
 
                 rebuild_device_list(&self.list_box, &state);

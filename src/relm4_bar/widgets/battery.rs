@@ -28,7 +28,7 @@ use crate::relm4_bar::config;
 use crate::relm4_bar::hub;
 use crate::relm4_bar::hub::battery::{BatteryState, BatteryStatus};
 
-use super::{NamedWidget, WidgetInit, capsule, capsule_interactive, set_exclusive_class};
+use super::{NamedWidget, WidgetInit, capsule, capsule_interactive, popover, set_exclusive_class};
 
 /// Symbolic icon names registered via the IconTheme search path. The
 /// `*-symbolic.svg` files use `fill="currentColor"` so they recolor with
@@ -184,6 +184,7 @@ impl SimpleComponent for Battery {
         let popover = gtk::Popover::builder().autohide(true).build();
         popover.add_css_class("battery-popover");
         popover.set_parent(&root);
+        popover::install_motion(&popover);
 
         let popover_box = gtk::Box::new(gtk::Orientation::Vertical, 4);
 
@@ -204,12 +205,12 @@ impl SimpleComponent for Battery {
         popover_health.set_xalign(0.0);
         popover_box.append(&popover_health);
 
-        popover.set_child(Some(&popover_box));
+        popover::set_liquid_child(&popover, &popover_box);
 
         // Click → open popover.
         let click = gtk::GestureClick::new();
         let popover_for_click = popover.clone();
-        click.connect_pressed(move |_, _, _, _| popover_for_click.popup());
+        click.connect_pressed(move |_, _, _, _| popover::toggle(&popover_for_click));
         root.add_controller(click);
 
         let model = Battery {
