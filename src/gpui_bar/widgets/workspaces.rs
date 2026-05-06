@@ -5,9 +5,9 @@ use gpui::{
     Animation, AnimationExt, Context, ElementId, Hsla, InteractiveElement, IntoElement,
     ParentElement, StatefulInteractiveElement, Styled, Window, div, px, rgb,
 };
-use uuid::Uuid;
 use niri_ipc::socket::Socket;
 use niri_ipc::{Action, Request, WorkspaceReferenceArg};
+use uuid::Uuid;
 
 use super::{BarWidget, impl_render};
 
@@ -37,9 +37,7 @@ impl Workspaces {
 
         self.outputs
             .iter()
-            .find(|o| {
-                Uuid::new_v5(&Uuid::NAMESPACE_DNS, o.name.as_bytes()) == display_uuid
-            })
+            .find(|o| Uuid::new_v5(&Uuid::NAMESPACE_DNS, o.name.as_bytes()) == display_uuid)
             .map(|o| o.name.clone())
     }
 }
@@ -241,19 +239,16 @@ impl BarWidget for Workspaces {
                         log::debug!("workspaces: click ws {}", id);
                         std::thread::spawn(move || {
                             if let Ok(mut socket) = Socket::connect() {
-                                let _ = socket.send(Request::Action(
-                                    Action::FocusWorkspace {
-                                        reference: WorkspaceReferenceArg::Id(id),
-                                    },
-                                ));
+                                let _ = socket.send(Request::Action(Action::FocusWorkspace {
+                                    reference: WorkspaceReferenceArg::Id(id),
+                                }));
                             }
                         });
                     });
 
                 inner.with_animation(
                     anim_key,
-                    Animation::new(Duration::from_millis(220))
-                        .with_easing(gpui::ease_out_quint()),
+                    Animation::new(Duration::from_millis(220)).with_easing(gpui::ease_out_quint()),
                     move |el, progress| {
                         let w = from_w + (target_w - from_w) * progress;
 

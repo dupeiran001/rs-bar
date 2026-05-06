@@ -4,8 +4,8 @@ use crate::gpui_bar::Bar;
 use crate::gpui_bar::theme;
 use crate::gpui_bar::widgets::{
     Battery, BatteryDraw, Bluetooth, Brightness, CapsLock, Clock, CpuDraw, CpuFreq, CpuTemp,
-    CpuUsage, Fcitx, GpuBusy, GpuDraw, Memory, Minimap, Notch, PkgUpdate, Power, PsysDraw,
-    Tray, Volume, Widget, Wifi, WindowTitle, Wireguard, Workspaces, group,
+    CpuUsage, Fcitx, GpuBusy, GpuDraw, Memory, Minimap, Notch, PkgUpdate, Power, PsysDraw, Tray,
+    Volume, Widget, Wifi, WindowTitle, Wireguard, Workspaces, group,
 };
 
 use super::{Config, widgets};

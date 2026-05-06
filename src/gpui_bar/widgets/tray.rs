@@ -115,12 +115,12 @@ pub(super) fn tray_server() -> &'static TrayServer {
                         let map = items_map.lock().unwrap();
                         *ev_items.lock().unwrap() = rebuild(&map);
                         {
-                                        let mut subs = ev_subs.lock().unwrap();
-                                        subs.retain(|tx| !tx.is_closed());
-                                        for tx in subs.iter() {
-                                            let _ = tx.try_send(());
-                                        }
-                                    }
+                            let mut subs = ev_subs.lock().unwrap();
+                            subs.retain(|tx| !tx.is_closed());
+                            for tx in subs.iter() {
+                                let _ = tx.try_send(());
+                            }
+                        }
                     }
 
                     loop {
@@ -129,12 +129,12 @@ pub(super) fn tray_server() -> &'static TrayServer {
                                 let map = items_map.lock().unwrap();
                                 *ev_items.lock().unwrap() = rebuild(&map);
                                 {
-                                        let mut subs = ev_subs.lock().unwrap();
-                                        subs.retain(|tx| !tx.is_closed());
-                                        for tx in subs.iter() {
-                                            let _ = tx.try_send(());
-                                        }
+                                    let mut subs = ev_subs.lock().unwrap();
+                                    subs.retain(|tx| !tx.is_closed());
+                                    for tx in subs.iter() {
+                                        let _ = tx.try_send(());
                                     }
+                                }
                             }
                             Err(e) => {
                                 log::error!("tray: event error: {e}");
@@ -240,8 +240,7 @@ impl BarWidget for Tray {
 
         // At least as wide as tall for a circular look when collapsed
         let collapsed_w = button_h;
-        let expanded_w =
-            collapsed_w + (n_items as f32) * (tray_icon_size + 4.0) + 4.0;
+        let expanded_w = collapsed_w + (n_items as f32) * (tray_icon_size + 4.0) + 4.0;
 
         // Build icon row
         let icons = div()
@@ -276,10 +275,7 @@ impl BarWidget for Tray {
                         .into_any_element()
                 };
 
-                let tooltip_text = item
-                    .title
-                    .clone()
-                    .unwrap_or_else(|| item.id.clone());
+                let tooltip_text = item.title.clone().unwrap_or_else(|| item.id.clone());
 
                 div()
                     .id(id)
@@ -298,7 +294,10 @@ impl BarWidget for Tray {
         let arrow_path = if expanded {
             concat!(env!("CARGO_MANIFEST_DIR"), "/assets/icons/tray-arrow.svg")
         } else {
-            concat!(env!("CARGO_MANIFEST_DIR"), "/assets/icons/tray-arrow-left.svg")
+            concat!(
+                env!("CARGO_MANIFEST_DIR"),
+                "/assets/icons/tray-arrow-left.svg"
+            )
         };
 
         let content = div()
@@ -356,7 +355,11 @@ impl BarWidget for Tray {
             })
             .child(content)
             .with_animation(
-                if expanded { "tray-expand" } else { "tray-collapse" },
+                if expanded {
+                    "tray-expand"
+                } else {
+                    "tray-collapse"
+                },
                 Animation::new(Duration::from_millis(if expanded { 400 } else { 300 }))
                     .with_easing(if expanded { ease_expand } else { ease_collapse }),
                 move |el, progress| {

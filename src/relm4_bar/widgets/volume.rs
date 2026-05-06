@@ -35,12 +35,7 @@ const ICON_MIC_OFF: &str = "mic-off-symbolic";
 
 /// CSS classes for color states. `set_exclusive_class` strips the others
 /// before adding the chosen one, so stale classes can't accumulate.
-const COLOR_CLASSES: &[&str] = &[
-    "volume-muted",
-    "volume-low",
-    "volume-mid",
-    "volume-high",
-];
+const COLOR_CLASSES: &[&str] = &["volume-muted", "volume-low", "volume-mid", "volume-high"];
 
 fn ensure_css() {
     static ONCE: OnceLock<()> = OnceLock::new();
@@ -200,9 +195,7 @@ impl SimpleComponent for Volume {
         // Click → popup. Scroll → ±5% on output volume.
         popover.attach_click(&root);
         {
-            let scroll = gtk::EventControllerScroll::new(
-                gtk::EventControllerScrollFlags::VERTICAL,
-            );
+            let scroll = gtk::EventControllerScroll::new(gtk::EventControllerScrollFlags::VERTICAL);
             scroll.connect_scroll(move |_, _dx, dy| {
                 let cur_pct = {
                     let mut rx = hub::volume::subscribe();
@@ -345,9 +338,7 @@ fn build_section(
 
     // Dropdown for the device list.
     let dropdown_model = gtk::StringList::new(&[]);
-    let dropdown = gtk::DropDown::builder()
-        .model(&dropdown_model)
-        .build();
+    let dropdown = gtk::DropDown::builder().model(&dropdown_model).build();
     dropdown.add_css_class("noctalia-dropdown");
     section.append(&dropdown);
 
@@ -360,10 +351,8 @@ fn build_section(
     // Pending GSourceIds for the auto-clear timer and the debounced
     // set_volume call. Each new event cancels the previous timer and
     // schedules a fresh one (last-write-wins).
-    let pending_release: Rc<RefCell<Option<glib::SourceId>>> =
-        Rc::new(RefCell::new(None));
-    let pending_send: Rc<RefCell<Option<glib::SourceId>>> =
-        Rc::new(RefCell::new(None));
+    let pending_release: Rc<RefCell<Option<glib::SourceId>>> = Rc::new(RefCell::new(None));
+    let pending_send: Rc<RefCell<Option<glib::SourceId>>> = Rc::new(RefCell::new(None));
 
     // Wire signals.
     {
@@ -389,13 +378,10 @@ fn build_section(
             }
             let user_dragging_clear = user_dragging.clone();
             let pending_release_clear = pending_release.clone();
-            let release_id = glib::timeout_add_local_once(
-                Duration::from_millis(150),
-                move || {
-                    *user_dragging_clear.borrow_mut() = false;
-                    *pending_release_clear.borrow_mut() = None;
-                },
-            );
+            let release_id = glib::timeout_add_local_once(Duration::from_millis(150), move || {
+                *user_dragging_clear.borrow_mut() = false;
+                *pending_release_clear.borrow_mut() = None;
+            });
             *pending_release.borrow_mut() = Some(release_id);
 
             // Debounce the actual set_volume call. Each new value-change
@@ -406,13 +392,10 @@ fn build_section(
                 prev.remove();
             }
             let pending_send_clear = pending_send.clone();
-            let send_id = glib::timeout_add_local_once(
-                Duration::from_millis(30),
-                move || {
-                    channel.set_volume(v);
-                    *pending_send_clear.borrow_mut() = None;
-                },
-            );
+            let send_id = glib::timeout_add_local_once(Duration::from_millis(30), move || {
+                channel.set_volume(v);
+                *pending_send_clear.borrow_mut() = None;
+            });
             *pending_send.borrow_mut() = Some(send_id);
         });
     }
@@ -489,8 +472,7 @@ fn apply_to_section(
     // Rebuild dropdown only if the device list changed.
     let need_rebuild = {
         let names = s.dropdown_names.borrow();
-        names.len() != devices.len()
-            || names.iter().zip(devices.iter()).any(|(n, d)| n != &d.name)
+        names.len() != devices.len() || names.iter().zip(devices.iter()).any(|(n, d)| n != &d.name)
     };
     if need_rebuild {
         let mut names_mut = s.dropdown_names.borrow_mut();

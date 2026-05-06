@@ -41,7 +41,10 @@ fn detect_layout() -> CoreLayout {
         std::path::Path::new("/sys/devices/system/cpu/cpu0/topology/core_type").exists();
 
     if has_core_type {
-        for entry in std::fs::read_dir("/sys/devices/system/cpu").into_iter().flatten() {
+        for entry in std::fs::read_dir("/sys/devices/system/cpu")
+            .into_iter()
+            .flatten()
+        {
             let entry = match entry {
                 Ok(e) => e,
                 Err(_) => continue,
@@ -62,7 +65,10 @@ fn detect_layout() -> CoreLayout {
         }
     } else {
         let mut all_cpus: Vec<(u32, u64)> = Vec::new();
-        for entry in std::fs::read_dir("/sys/devices/system/cpu").into_iter().flatten() {
+        for entry in std::fs::read_dir("/sys/devices/system/cpu")
+            .into_iter()
+            .flatten()
+        {
             let entry = match entry {
                 Ok(e) => e,
                 Err(_) => continue,
@@ -73,12 +79,10 @@ fn detect_layout() -> CoreLayout {
                 Some(n) => n,
                 None => continue,
             };
-            let max_freq = std::fs::read_to_string(
-                entry.path().join("cpufreq/cpuinfo_max_freq"),
-            )
-            .ok()
-            .and_then(|s| s.trim().parse::<u64>().ok())
-            .unwrap_or(0);
+            let max_freq = std::fs::read_to_string(entry.path().join("cpufreq/cpuinfo_max_freq"))
+                .ok()
+                .and_then(|s| s.trim().parse::<u64>().ok())
+                .unwrap_or(0);
             if max_freq > 0 {
                 all_cpus.push((num, max_freq));
             }
@@ -227,27 +231,49 @@ fn broadcast() -> &'static Broadcast<FreqReading> {
 
 fn freq_monitor(layout: CoreLayout, bc: Broadcast<FreqReading>) {
     let tfd = unsafe { libc::timerfd_create(libc::CLOCK_MONOTONIC, libc::TFD_CLOEXEC) };
-    if tfd < 0 { return; }
+    if tfd < 0 {
+        return;
+    }
     let tfd = unsafe { OwnedFd::from_raw_fd(tfd) };
 
     let spec = libc::itimerspec {
-        it_interval: libc::timespec { tv_sec: 1, tv_nsec: 0 },
-        it_value: libc::timespec { tv_sec: 0, tv_nsec: 1 },
+        it_interval: libc::timespec {
+            tv_sec: 1,
+            tv_nsec: 0,
+        },
+        it_value: libc::timespec {
+            tv_sec: 0,
+            tv_nsec: 1,
+        },
     };
     unsafe { libc::timerfd_settime(tfd.as_raw_fd(), 0, &spec, std::ptr::null_mut()) };
 
     let epfd = unsafe { libc::epoll_create1(libc::EPOLL_CLOEXEC) };
-    if epfd < 0 { return; }
+    if epfd < 0 {
+        return;
+    }
     let epfd = unsafe { OwnedFd::from_raw_fd(epfd) };
 
-    let mut ev = libc::epoll_event { events: libc::EPOLLIN as u32, u64: 0 };
-    unsafe { libc::epoll_ctl(epfd.as_raw_fd(), libc::EPOLL_CTL_ADD, tfd.as_raw_fd(), &mut ev) };
+    let mut ev = libc::epoll_event {
+        events: libc::EPOLLIN as u32,
+        u64: 0,
+    };
+    unsafe {
+        libc::epoll_ctl(
+            epfd.as_raw_fd(),
+            libc::EPOLL_CTL_ADD,
+            tfd.as_raw_fd(),
+            &mut ev,
+        )
+    };
 
     loop {
         let mut out = [libc::epoll_event { events: 0, u64: 0 }; 1];
         let n = unsafe { libc::epoll_wait(epfd.as_raw_fd(), out.as_mut_ptr(), 1, -1) };
         if n < 0 {
-            if std::io::Error::last_os_error().kind() == std::io::ErrorKind::Interrupted { continue; }
+            if std::io::Error::last_os_error().kind() == std::io::ErrorKind::Interrupted {
+                continue;
+            }
             break;
         }
         let mut buf = [0u8; 8];
@@ -302,7 +328,9 @@ impl BarWidget for CpuFreq {
         }
     }
 
-    fn set_grouped(&mut self) { self.grouped = true; }
+    fn set_grouped(&mut self) {
+        self.grouped = true;
+    }
 
     fn render(&mut self, _window: &mut Window, _cx: &mut Context<Self>) -> impl IntoElement {
         let t = crate::gpui_bar::config::THEME();
@@ -372,7 +400,10 @@ impl BarWidget for CpuFreq {
         let content_h = crate::gpui_bar::config::CONTENT_HEIGHT();
         let sep_h = ((content_h - 4.0) - 10.0).max(6.0);
         let text_el = match &self.display {
-            FreqDisplay::Single(s) => div().text_color(rgb(t.fg)).child(s.clone()).into_any_element(),
+            FreqDisplay::Single(s) => div()
+                .text_color(rgb(t.fg))
+                .child(s.clone())
+                .into_any_element(),
             FreqDisplay::Split(p, e) => div()
                 .flex()
                 .items_center()

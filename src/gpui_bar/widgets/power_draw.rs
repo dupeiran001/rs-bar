@@ -43,7 +43,11 @@ fn sysfs_readable(path: &Path) -> bool {
 
 /// Run `tick` every `interval_secs` on a timerfd + epoll loop.
 /// Returns when `tick` returns `false` (channel closed).
-pub(crate) fn timerfd_loop(interval_secs: i64, fire_immediately: bool, mut tick: impl FnMut() -> bool) {
+pub(crate) fn timerfd_loop(
+    interval_secs: i64,
+    fire_immediately: bool,
+    mut tick: impl FnMut() -> bool,
+) {
     let tfd = unsafe { libc::timerfd_create(libc::CLOCK_MONOTONIC, libc::TFD_CLOEXEC) };
     if tfd < 0 {
         return;
@@ -580,8 +584,7 @@ fn cpu_draw_broadcast() -> Option<&'static Broadcast<CpuPowerReading>> {
             .spawn(move || match source {
                 CpuPowerSource::Macsmc(path) => {
                     timerfd_loop(2, true, || {
-                        let watts =
-                            sysfs_u64(&path).map(|uw| uw as f64 / 1e6).unwrap_or(0.0);
+                        let watts = sysfs_u64(&path).map(|uw| uw as f64 / 1e6).unwrap_or(0.0);
                         producer.publish(CpuPowerReading { watts, vendor });
                         true
                     });
@@ -624,9 +627,7 @@ impl BarWidget for CpuDraw {
                     if this
                         .update(cx, |this, cx| {
                             let changed = match &this.reading {
-                                Some(prev) => {
-                                    quantise_watts(prev.watts) != quantise_watts(r.watts)
-                                }
+                                Some(prev) => quantise_watts(prev.watts) != quantise_watts(r.watts),
                                 None => true,
                             };
                             if changed {
@@ -764,9 +765,7 @@ impl BarWidget for PsysDraw {
                     if this
                         .update(cx, |this, cx| {
                             let changed = match &this.reading {
-                                Some(prev) => {
-                                    quantise_watts(prev.watts) != quantise_watts(r.watts)
-                                }
+                                Some(prev) => quantise_watts(prev.watts) != quantise_watts(r.watts),
                                 None => true,
                             };
                             if changed {
@@ -872,9 +871,7 @@ fn gpu_draw_broadcast() -> Option<&'static Broadcast<GpuPowerReading>> {
                             ])
                             .output()
                             .ok()
-                            .and_then(|o| {
-                                String::from_utf8_lossy(&o.stdout).trim().parse().ok()
-                            })
+                            .and_then(|o| String::from_utf8_lossy(&o.stdout).trim().parse().ok())
                             .unwrap_or(0.0)
                     };
                     producer.publish(GpuPowerReading {
@@ -902,9 +899,7 @@ impl BarWidget for GpuDraw {
                     if this
                         .update(cx, |this, cx| {
                             let changed = match &this.reading {
-                                Some(prev) => {
-                                    quantise_watts(prev.watts) != quantise_watts(r.watts)
-                                }
+                                Some(prev) => quantise_watts(prev.watts) != quantise_watts(r.watts),
                                 None => true,
                             };
                             if changed {

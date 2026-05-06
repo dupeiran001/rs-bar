@@ -1,8 +1,8 @@
 use std::path::PathBuf;
 
 use gpui::{
-    Context, IntoElement, ParentElement, Styled, Window, div, img, px, rgb, svg,
-    prelude::FluentBuilder,
+    Context, IntoElement, ParentElement, Styled, Window, div, img, prelude::FluentBuilder, px, rgb,
+    svg,
 };
 
 use super::{BarWidget, impl_render};

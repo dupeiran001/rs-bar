@@ -46,7 +46,10 @@ fn detect_backlight() -> Option<Backlight> {
         ) {
             if let Ok(max_val) = max_s.trim().parse::<u32>() {
                 if max_val > 0 {
-                    return Some(Backlight { current, max: max_val });
+                    return Some(Backlight {
+                        current,
+                        max: max_val,
+                    });
                 }
             }
         }
@@ -69,7 +72,11 @@ fn brightness_server() -> &'static BrightnessServer {
         let backlight = detect_backlight().map(Arc::new);
         let initial = match &backlight {
             Some(bl) => {
-                log::info!("brightness: sysfs {} (max={})", bl.current.display(), bl.max);
+                log::info!(
+                    "brightness: sysfs {} (max={})",
+                    bl.current.display(),
+                    bl.max
+                );
                 read_sysfs_brightness(bl)
             }
             None => {
@@ -88,17 +95,19 @@ fn brightness_server() -> &'static BrightnessServer {
             let poll_bl = bl.clone();
             std::thread::Builder::new()
                 .name("brightness-monitor".into())
-                .spawn(move || loop {
-                    std::thread::sleep(Duration::from_secs(2));
-                    let new = read_sysfs_brightness(&poll_bl);
-                    let mut current = poll_state.lock().unwrap();
-                    if current.percent != new.percent {
-                        *current = new;
-                        drop(current);
-                        let mut subs = poll_subs.lock().unwrap();
-                        subs.retain(|tx| !tx.is_closed());
-                        for tx in subs.iter() {
-                            let _ = tx.try_send(());
+                .spawn(move || {
+                    loop {
+                        std::thread::sleep(Duration::from_secs(2));
+                        let new = read_sysfs_brightness(&poll_bl);
+                        let mut current = poll_state.lock().unwrap();
+                        if current.percent != new.percent {
+                            *current = new;
+                            drop(current);
+                            let mut subs = poll_subs.lock().unwrap();
+                            subs.retain(|tx| !tx.is_closed());
+                            for tx in subs.iter() {
+                                let _ = tx.try_send(());
+                            }
                         }
                     }
                 })
@@ -146,7 +155,10 @@ pub struct Brightness {
 impl Brightness {
     fn icon_path(&self) -> &'static str {
         if self.state.percent < 50 {
-            concat!(env!("CARGO_MANIFEST_DIR"), "/assets/icons/brightness-low.svg")
+            concat!(
+                env!("CARGO_MANIFEST_DIR"),
+                "/assets/icons/brightness-low.svg"
+            )
         } else {
             concat!(
                 env!("CARGO_MANIFEST_DIR"),
@@ -225,7 +237,11 @@ impl BarWidget for Brightness {
                     ),
             )
             .child(
-                div().flex().items_center().gap(px(4.0)).pr(px(8.0))
+                div()
+                    .flex()
+                    .items_center()
+                    .gap(px(4.0))
+                    .pr(px(8.0))
                     .child(
                         div()
                             .w(px(32.0))
@@ -297,7 +313,8 @@ impl BarWidget for Brightness {
                                         cx.notify();
                                     }
                                 });
-                            }).detach();
+                            })
+                            .detach();
                         } else {
                             let entity = cx.weak_entity();
                             cx.spawn(async move |_this, cx| {
@@ -311,7 +328,8 @@ impl BarWidget for Brightness {
                                         cx.notify();
                                     }
                                 });
-                            }).detach();
+                            })
+                            .detach();
                         }
                     });
                 }
@@ -324,15 +342,17 @@ impl BarWidget for Brightness {
                     down_cmd
                 };
                 std::thread::spawn(move || {
-                    let _ = std::process::Command::new("sh")
-                        .args(["-c", cmd])
-                        .output();
+                    let _ = std::process::Command::new("sh").args(["-c", cmd]).output();
                     notify_brightness_change();
                 });
             })
             .child(content)
             .with_animation(
-                if expanded { "brt-expand" } else { "brt-collapse" },
+                if expanded {
+                    "brt-expand"
+                } else {
+                    "brt-collapse"
+                },
                 Animation::new(Duration::from_millis(if expanded { 400 } else { 300 }))
                     .with_easing(if expanded { ease_expand } else { ease_collapse }),
                 move |el, progress| {

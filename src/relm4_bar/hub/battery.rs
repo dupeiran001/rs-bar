@@ -165,7 +165,9 @@ fn estimate_time_remaining(
     } else if charge_path_exists {
         let i = sysfs_i64(&bat.dir.join("current_now"))?;
         let v = i.unsigned_abs();
-        if v == 0 { return None; }
+        if v == 0 {
+            return None;
+        }
         v
     } else {
         return None;

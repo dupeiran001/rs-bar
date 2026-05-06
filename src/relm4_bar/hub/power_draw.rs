@@ -124,7 +124,10 @@ fn detect_rapl() -> (Vec<RaplDomain>, Vec<RaplDomain>) {
         }
         let name = sysfs_str(&path.join("name"));
         let max = sysfs_u64(&path.join("max_energy_range_uj")).unwrap_or(u64::MAX);
-        let dom = RaplDomain { energy_path: ep, max_uj: max };
+        let dom = RaplDomain {
+            energy_path: ep,
+            max_uj: max,
+        };
         if name.starts_with("package") {
             pkg.push(dom);
         } else if name.starts_with("psys") || name.starts_with("platform") {
@@ -252,9 +255,9 @@ fn detect_gpu() -> Option<GpuInfo> {
 
             // Lower rank wins. Mirrors rs-bar widget ordering.
             let rank = match vendor.as_str() {
-                "0x10de" | "0x1002" => 1u32,             // NVIDIA / AMD discrete
+                "0x10de" | "0x1002" => 1u32,                     // NVIDIA / AMD discrete
                 "0x8086" if bus.starts_with("0000:00:02.") => 4, // Intel iGPU
-                "0x8086" => 2,                            // Intel ARC
+                "0x8086" => 2,                                   // Intel ARC
                 _ => continue,
             };
 

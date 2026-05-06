@@ -4,8 +4,8 @@ use gpui::App;
 
 use crate::gpui_bar::Bar;
 use crate::gpui_bar::theme::Theme;
-mod macbook;
 mod intel;
+mod macbook;
 
 pub(crate) struct Config {
     pub theme: &'static Theme,
@@ -66,12 +66,18 @@ pub(crate) fn init() {
 
 /// Access the active configuration. Panics if `init()` has not been called.
 pub(crate) fn get() -> &'static Config {
-    CONFIG.get().expect("config::init() must be called before get()")
+    CONFIG
+        .get()
+        .expect("config::init() must be called before get()")
 }
 
 /// Build the bar widget layout for the active profile.
 pub(crate) fn bar(cx: &mut App) -> Bar {
-    match PROFILE.get().expect("config::init() must be called before bar()").as_str() {
+    match PROFILE
+        .get()
+        .expect("config::init() must be called before bar()")
+        .as_str()
+    {
         "macbook" => macbook::bar(cx),
         "intel" => intel::bar(cx),
         _ => unreachable!(), // init() already validated
@@ -81,33 +87,61 @@ pub(crate) fn bar(cx: &mut App) -> Bar {
 // Convenience re-exports so call sites can use short paths like `config::THEME`.
 // These read from the global config at runtime.
 #[allow(non_snake_case)]
-pub(crate) fn THEME() -> &'static Theme { get().theme }
+pub(crate) fn THEME() -> &'static Theme {
+    get().theme
+}
 #[allow(non_snake_case)]
-pub(crate) fn FONT_FAMILY() -> &'static str { get().font_family }
+pub(crate) fn FONT_FAMILY() -> &'static str {
+    get().font_family
+}
 #[allow(non_snake_case)]
-pub(crate) fn ICON_THEME() -> &'static str { get().icon_theme }
+pub(crate) fn ICON_THEME() -> &'static str {
+    get().icon_theme
+}
 #[allow(non_snake_case)]
-pub(crate) fn ICON_SIZE() -> f32 { get().icon_size }
+pub(crate) fn ICON_SIZE() -> f32 {
+    get().icon_size
+}
 #[allow(non_snake_case)]
-pub(crate) fn POWER_COMMAND() -> &'static str { get().power_command }
+pub(crate) fn POWER_COMMAND() -> &'static str {
+    get().power_command
+}
 #[allow(non_snake_case)]
-pub(crate) fn BRIGHTNESS_GET_CMD() -> &'static str { get().brightness_get_cmd }
+pub(crate) fn BRIGHTNESS_GET_CMD() -> &'static str {
+    get().brightness_get_cmd
+}
 #[allow(non_snake_case)]
-pub(crate) fn BRIGHTNESS_UP_CMD() -> &'static str { get().brightness_up_cmd }
+pub(crate) fn BRIGHTNESS_UP_CMD() -> &'static str {
+    get().brightness_up_cmd
+}
 #[allow(non_snake_case)]
-pub(crate) fn BRIGHTNESS_DOWN_CMD() -> &'static str { get().brightness_down_cmd }
+pub(crate) fn BRIGHTNESS_DOWN_CMD() -> &'static str {
+    get().brightness_down_cmd
+}
 #[allow(non_snake_case)]
-pub(crate) fn POWER_ICON() -> &'static str { get().power_icon }
+pub(crate) fn POWER_ICON() -> &'static str {
+    get().power_icon
+}
 #[allow(non_snake_case)]
-pub(crate) fn WIREGUARD_CONNECTION() -> &'static str { get().wireguard_connection }
+pub(crate) fn WIREGUARD_CONNECTION() -> &'static str {
+    get().wireguard_connection
+}
 #[allow(non_snake_case)]
-pub(crate) fn BAR_HEIGHT() -> f32 { get().bar_height }
+pub(crate) fn BAR_HEIGHT() -> f32 {
+    get().bar_height
+}
 #[allow(non_snake_case)]
-pub(crate) fn CONTENT_HEIGHT() -> f32 { get().content_height() }
+pub(crate) fn CONTENT_HEIGHT() -> f32 {
+    get().content_height()
+}
 #[allow(non_snake_case)]
-pub(crate) fn BORDER_TOP() -> u32 { get().border_top }
+pub(crate) fn BORDER_TOP() -> u32 {
+    get().border_top
+}
 #[allow(non_snake_case)]
-pub(crate) fn BORDER_BOTTOM() -> u32 { get().border_bottom }
+pub(crate) fn BORDER_BOTTOM() -> u32 {
+    get().border_bottom
+}
 
 // macro rule to simplify creation of bar widgets
 // Accepts plain widget types and group!() calls:

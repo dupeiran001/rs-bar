@@ -107,7 +107,13 @@ fn find_capslock_device() -> Option<PathBuf> {
 
         // Does it have LED_CAPSL?
         let mut led_bits = [0u8; 1];
-        if unsafe { libc::ioctl(raw, eviocgbit(EV_LED, led_bits.len()), led_bits.as_mut_ptr()) } < 0
+        if unsafe {
+            libc::ioctl(
+                raw,
+                eviocgbit(EV_LED, led_bits.len()),
+                led_bits.as_mut_ptr(),
+            )
+        } < 0
         {
             continue;
         }
@@ -129,15 +135,17 @@ fn sender() -> &'static watch::Sender<bool> {
 
         let initial = device_path
             .as_ref()
-            .map(|p| open_readonly(p).map(|fd| read_led_state(fd.as_raw_fd())).unwrap_or(false))
+            .map(|p| {
+                open_readonly(p)
+                    .map(|fd| read_led_state(fd.as_raw_fd()))
+                    .unwrap_or(false)
+            })
             .unwrap_or(false);
 
         let (tx, _rx) = watch::channel(initial);
 
         let Some(path) = device_path else {
-            log::warn!(
-                "capslock: no device with LED_CAPSL found (are you in the `input` group?)"
-            );
+            log::warn!("capslock: no device with LED_CAPSL found (are you in the `input` group?)");
             return tx;
         };
 
@@ -168,14 +176,10 @@ fn sender() -> &'static watch::Sender<bool> {
                     events: libc::EPOLLIN as u32,
                     u64: 0,
                 };
-                if unsafe {
-                    libc::epoll_ctl(epfd.as_raw_fd(), libc::EPOLL_CTL_ADD, raw, &mut ev)
-                } < 0
+                if unsafe { libc::epoll_ctl(epfd.as_raw_fd(), libc::EPOLL_CTL_ADD, raw, &mut ev) }
+                    < 0
                 {
-                    log::warn!(
-                        "capslock: epoll_ctl: {}",
-                        std::io::Error::last_os_error()
-                    );
+                    log::warn!("capslock: epoll_ctl: {}", std::io::Error::last_os_error());
                     return;
                 }
 
@@ -183,11 +187,9 @@ fn sender() -> &'static watch::Sender<bool> {
 
                 loop {
                     let mut out = [libc::epoll_event { events: 0, u64: 0 }; 1];
-                    let n =
-                        unsafe { libc::epoll_wait(epfd.as_raw_fd(), out.as_mut_ptr(), 1, -1) };
+                    let n = unsafe { libc::epoll_wait(epfd.as_raw_fd(), out.as_mut_ptr(), 1, -1) };
                     if n < 0 {
-                        if std::io::Error::last_os_error().kind()
-                            == std::io::ErrorKind::Interrupted
+                        if std::io::Error::last_os_error().kind() == std::io::ErrorKind::Interrupted
                         {
                             continue;
                         }
@@ -198,9 +200,8 @@ fn sender() -> &'static watch::Sender<bool> {
                     let mut new_state: Option<bool> = None;
                     loop {
                         let mut buf = [0u8; INPUT_EVENT_SIZE];
-                        let n = unsafe {
-                            libc::read(raw, buf.as_mut_ptr().cast(), INPUT_EVENT_SIZE)
-                        };
+                        let n =
+                            unsafe { libc::read(raw, buf.as_mut_ptr().cast(), INPUT_EVENT_SIZE) };
                         if n != INPUT_EVENT_SIZE as isize {
                             break;
                         }

@@ -24,7 +24,7 @@ pub struct BarInit {
 
 #[allow(dead_code)]
 pub struct Bar {
-    _layout: BarLayout, // keep widgets alive; window owns their roots
+    _layout: BarLayout,                 // keep widgets alive; window owns their roots
     _halves_size_group: gtk::SizeGroup, // keeps the equal-width constraint live
 }
 
@@ -60,7 +60,11 @@ impl Component for Bar {
         window
     }
 
-    fn init(init: Self::Init, window: Self::Root, _sender: ComponentSender<Self>) -> ComponentParts<Self> {
+    fn init(
+        init: Self::Init,
+        window: Self::Root,
+        _sender: ComponentSender<Self>,
+    ) -> ComponentParts<Self> {
         window.set_monitor(Some(&init.monitor));
 
         // Three-column structural row: [left_half] [center_zone] [right_half].
@@ -79,6 +83,8 @@ impl Component for Bar {
         let left_half = gtk::Box::new(gtk::Orientation::Horizontal, 8);
         let left_zone = build_zone(&init.layout.left, gtk::Align::Start);
         let center_left_zone = build_zone(&init.layout.center_left, gtk::Align::End);
+        left_zone.add_css_class("bar-zone-left");
+        center_left_zone.add_css_class("bar-zone-center-left");
         center_left_zone.set_hexpand(true);
         left_half.append(&left_zone);
         left_half.append(&center_left_zone);
@@ -87,6 +93,8 @@ impl Component for Bar {
         let right_half = gtk::Box::new(gtk::Orientation::Horizontal, 8);
         let center_right_zone = build_zone(&init.layout.center_right, gtk::Align::Start);
         let right_zone = build_zone(&init.layout.right, gtk::Align::End);
+        center_right_zone.add_css_class("bar-zone-center-right");
+        right_zone.add_css_class("bar-zone-right");
         right_zone.set_hexpand(true);
         right_half.append(&center_right_zone);
         right_half.append(&right_zone);
@@ -98,10 +106,12 @@ impl Component for Bar {
         // sits over empty bar bg and is invisible — it only becomes visible
         // when content reaches the inner edge and gets faded out.
         let left_with_fade = build_half_with_fade(&left_half, "bar-fade-left", gtk::Align::End);
-        let right_with_fade = build_half_with_fade(&right_half, "bar-fade-right", gtk::Align::Start);
+        let right_with_fade =
+            build_half_with_fade(&right_half, "bar-fade-right", gtk::Align::Start);
 
         // Center column: real, structural, never faded.
         let center_zone = build_zone(&init.layout.center, gtk::Align::Center);
+        center_zone.add_css_class("bar-zone-center");
 
         row.append(&left_with_fade);
         row.append(&center_zone);
@@ -137,7 +147,9 @@ impl Component for Bar {
             _layout: init.layout,
             _halves_size_group: halves_size_group,
         };
-        let widgets = BarWidgets { window: window.clone() };
+        let widgets = BarWidgets {
+            window: window.clone(),
+        };
         ComponentParts { model, widgets }
     }
 

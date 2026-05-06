@@ -40,10 +40,17 @@ pub fn timerfd_loop(interval: Duration, fire_immediately: bool, mut tick: impl F
     let int_secs = interval.as_secs() as i64;
     let int_nsecs = interval.subsec_nanos() as i64;
     let spec = libc::itimerspec {
-        it_interval: libc::timespec { tv_sec: int_secs, tv_nsec: int_nsecs },
+        it_interval: libc::timespec {
+            tv_sec: int_secs,
+            tv_nsec: int_nsecs,
+        },
         it_value: libc::timespec {
             tv_sec: if fire_immediately { 0 } else { int_secs },
-            tv_nsec: if fire_immediately { 1 } else { int_nsecs.max(1) },
+            tv_nsec: if fire_immediately {
+                1
+            } else {
+                int_nsecs.max(1)
+            },
         },
     };
     unsafe { libc::timerfd_settime(tfd.as_raw_fd(), 0, &spec, std::ptr::null_mut()) };
@@ -54,9 +61,17 @@ pub fn timerfd_loop(interval: Duration, fire_immediately: bool, mut tick: impl F
     }
     let epfd = unsafe { OwnedFd::from_raw_fd(epfd) };
 
-    let mut ev = libc::epoll_event { events: libc::EPOLLIN as u32, u64: 0 };
+    let mut ev = libc::epoll_event {
+        events: libc::EPOLLIN as u32,
+        u64: 0,
+    };
     unsafe {
-        libc::epoll_ctl(epfd.as_raw_fd(), libc::EPOLL_CTL_ADD, tfd.as_raw_fd(), &mut ev);
+        libc::epoll_ctl(
+            epfd.as_raw_fd(),
+            libc::EPOLL_CTL_ADD,
+            tfd.as_raw_fd(),
+            &mut ev,
+        );
     }
 
     loop {

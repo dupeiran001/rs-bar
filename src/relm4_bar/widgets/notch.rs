@@ -26,8 +26,14 @@ impl SimpleComponent for Notch {
         }
     }
 
-    fn init(init: Self::Init, root: Self::Root, _sender: ComponentSender<Self>) -> ComponentParts<Self> {
-        let model = Notch { grouped: init.grouped };
+    fn init(
+        init: Self::Init,
+        root: Self::Root,
+        _sender: ComponentSender<Self>,
+    ) -> ComponentParts<Self> {
+        let model = Notch {
+            grouped: init.grouped,
+        };
         let widgets = view_output!();
         capsule(&root, model.grouped);
         ComponentParts { model, widgets }

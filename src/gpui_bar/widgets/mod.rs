@@ -47,7 +47,9 @@ pub use window_title::WindowTitle;
 pub use wireguard::Wireguard;
 pub use workspaces::Workspaces;
 
-use gpui::{AnyView, AppContext, Context, IntoElement, ParentElement, Render, Styled, Window, div, px, rgb};
+use gpui::{
+    AnyView, AppContext, Context, IntoElement, ParentElement, Render, Styled, Window, div, px, rgb,
+};
 
 /// The single trait widget authors implement.
 pub trait BarWidget: 'static + Sized {

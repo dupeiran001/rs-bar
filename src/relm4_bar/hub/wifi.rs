@@ -563,7 +563,11 @@ fn read_connection_state() -> (bool, Option<ConnectedNetwork>) {
 /// scan-driven events (the timer or an explicit refresh).
 fn snapshot_now() -> WifiState {
     let (enabled, connected) = read_connection_state();
-    let networks = if enabled { nmcli_scan_networks() } else { Vec::new() };
+    let networks = if enabled {
+        nmcli_scan_networks()
+    } else {
+        Vec::new()
+    };
     WifiState {
         enabled,
         connected,

@@ -242,7 +242,11 @@ fn device_row(dev: &DeviceInfo) -> gtk::Box {
     let row = gtk::Box::new(gtk::Orientation::Horizontal, 8);
     row.add_css_class("bluetooth-device-row");
 
-    let name = if dev.name.is_empty() { dev.mac.clone() } else { dev.name.clone() };
+    let name = if dev.name.is_empty() {
+        dev.mac.clone()
+    } else {
+        dev.name.clone()
+    };
     let label = gtk::Label::new(Some(&name));
     label.set_hexpand(true);
     label.set_halign(gtk::Align::Start);
@@ -253,7 +257,11 @@ fn device_row(dev: &DeviceInfo) -> gtk::Box {
     row.append(&label);
 
     let button = gtk::Button::new();
-    button.set_label(if dev.connected { "Disconnect" } else { "Connect" });
+    button.set_label(if dev.connected {
+        "Disconnect"
+    } else {
+        "Connect"
+    });
     button.add_css_class("bluetooth-device-button");
 
     let mac = dev.mac.clone();

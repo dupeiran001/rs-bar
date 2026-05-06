@@ -227,6 +227,9 @@ macro_rules! group {
     (@item $entries:ident, |) => {
         $entries.push($crate::relm4_bar::widgets::GroupEntry::Separator);
     };
+    (@item $entries:ident, Clock) => {
+        compile_error!("Clock cannot be used inside `group!()`; it owns a custom animated capsule.");
+    };
     (@item $entries:ident, $w:ident) => {
         $entries.push($crate::relm4_bar::widgets::build_for_group::<$crate::relm4_bar::widgets::$w>());
     };

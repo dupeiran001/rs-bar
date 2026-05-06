@@ -1,6 +1,6 @@
 use gpui::{
-    BoxShadow, Context, InteractiveElement, IntoElement, ParentElement,
-    StatefulInteractiveElement, Styled, Window, div, point, px, rgb, svg,
+    BoxShadow, Context, InteractiveElement, IntoElement, ParentElement, StatefulInteractiveElement,
+    Styled, Window, div, point, px, rgb, svg,
 };
 
 use super::{BarWidget, impl_render};

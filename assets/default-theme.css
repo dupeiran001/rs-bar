@@ -24,6 +24,19 @@ window.rs-bar {
     padding: 0 8px;
 }
 
+/* Tighten the gaps around the structural center column without affecting the
+   outer bar edges or the spacing inside each zone. */
+.bar-zone-center-left {
+    padding-right: 4px;
+}
+.bar-zone-center {
+    padding-left: 4px;
+    padding-right: 4px;
+}
+.bar-zone-center-right {
+    padding-left: 4px;
+}
+
 .bar-capsule, .bar-group {
     background-color: @rs_surface;
     border: 1px solid @rs_border;
@@ -191,8 +204,22 @@ window.rs-bar {
 .fcitx-unknown { color: @rs_fg_dark;  }
 
 /* Clock */
+.clock-shell {
+    margin: 0;
+}
+.clock-pill {
+    background-color: @rs_surface;
+    border-radius: 9999px;
+}
+.clock-content {
+    min-height: 26px;
+    padding: 1px 7px;
+}
 .clock-time { color: @rs_accent;     font-size: 11px; line-height: 12px; }
 .clock-date { color: @rs_accent_dim; font-size: 9px;  line-height: 10px; }
+.clock-shell.interactive:hover .clock-pill {
+    background-color: @rs_border_highlight;
+}
 
 /* Date */
 .date-label { color: @rs_fg; }

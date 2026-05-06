@@ -45,7 +45,9 @@ impl BarWidget for Date {
         }
     }
 
-    fn set_grouped(&mut self) { self.grouped = true; }
+    fn set_grouped(&mut self) {
+        self.grouped = true;
+    }
 
     fn render(&mut self, _window: &mut Window, _cx: &mut Context<Self>) -> impl IntoElement {
         let t = crate::gpui_bar::config::THEME();
@@ -60,7 +62,10 @@ impl BarWidget for Date {
                 .text_color(rgb(t.fg))
                 .child(
                     svg()
-                        .external_path(concat!(env!("CARGO_MANIFEST_DIR"), "/assets/icons/calendar.svg").to_string())
+                        .external_path(
+                            concat!(env!("CARGO_MANIFEST_DIR"), "/assets/icons/calendar.svg")
+                                .to_string(),
+                        )
                         .size(px(crate::gpui_bar::config::ICON_SIZE()))
                         .text_color(rgb(t.fg))
                         .flex_shrink_0(),

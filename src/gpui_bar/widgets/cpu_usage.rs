@@ -105,15 +105,24 @@ fn broadcast() -> &'static Broadcast<f32> {
 fn cpu_monitor(bc: Broadcast<f32>) {
     let tfd = unsafe { libc::timerfd_create(libc::CLOCK_MONOTONIC, libc::TFD_CLOEXEC) };
     if tfd < 0 {
-        log::warn!("cpu_usage: timerfd_create: {}", std::io::Error::last_os_error());
+        log::warn!(
+            "cpu_usage: timerfd_create: {}",
+            std::io::Error::last_os_error()
+        );
         return;
     }
     let tfd = unsafe { OwnedFd::from_raw_fd(tfd) };
 
     // 1-second interval
     let spec = libc::itimerspec {
-        it_interval: libc::timespec { tv_sec: 1, tv_nsec: 0 },
-        it_value: libc::timespec { tv_sec: 1, tv_nsec: 0 },
+        it_interval: libc::timespec {
+            tv_sec: 1,
+            tv_nsec: 0,
+        },
+        it_value: libc::timespec {
+            tv_sec: 1,
+            tv_nsec: 0,
+        },
     };
     unsafe { libc::timerfd_settime(tfd.as_raw_fd(), 0, &spec, std::ptr::null_mut()) };
 
@@ -127,7 +136,14 @@ fn cpu_monitor(bc: Broadcast<f32>) {
         events: libc::EPOLLIN as u32,
         u64: 0,
     };
-    unsafe { libc::epoll_ctl(epfd.as_raw_fd(), libc::EPOLL_CTL_ADD, tfd.as_raw_fd(), &mut ev) };
+    unsafe {
+        libc::epoll_ctl(
+            epfd.as_raw_fd(),
+            libc::EPOLL_CTL_ADD,
+            tfd.as_raw_fd(),
+            &mut ev,
+        )
+    };
 
     let mut prev = read_cpu_times();
 
@@ -189,10 +205,15 @@ impl BarWidget for CpuUsage {
         })
         .detach();
 
-        Self { usage: 0.0, grouped: false }
+        Self {
+            usage: 0.0,
+            grouped: false,
+        }
     }
 
-    fn set_grouped(&mut self) { self.grouped = true; }
+    fn set_grouped(&mut self) {
+        self.grouped = true;
+    }
 
     fn render(&mut self, _window: &mut Window, _cx: &mut Context<Self>) -> impl IntoElement {
         let t = crate::gpui_bar::config::THEME();

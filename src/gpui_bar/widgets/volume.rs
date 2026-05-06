@@ -5,8 +5,9 @@ use std::time::Duration;
 use gpui::{
     Animation, AnimationExt, AppContext as _, Bounds, Context, InteractiveElement, IntoElement,
     MouseButton, ParentElement, Render, ScrollWheelEvent, Stateful, StatefulInteractiveElement,
-    Styled, Window, WindowBounds, WindowKind, WindowOptions, div, point, px, rgb, size, svg,
+    Styled, Window, WindowBounds, WindowKind, WindowOptions, div,
     layer_shell::{Anchor, KeyboardInteractivity, Layer, LayerShellOptions},
+    point, px, rgb, size, svg,
 };
 
 use super::{BarWidget, impl_render};
@@ -56,8 +57,11 @@ fn query_volume() -> (f32, bool) {
         Ok(o) => {
             let s = String::from_utf8_lossy(&o.stdout);
             let muted = s.contains("[MUTED]");
-            let volume = s.split_whitespace().nth(1)
-                .and_then(|v| v.parse::<f32>().ok()).unwrap_or(0.0);
+            let volume = s
+                .split_whitespace()
+                .nth(1)
+                .and_then(|v| v.parse::<f32>().ok())
+                .unwrap_or(0.0);
             (volume, muted)
         }
         Err(_) => (0.0, false),
@@ -66,93 +70,152 @@ fn query_volume() -> (f32, bool) {
 
 fn query_sinks() -> Vec<Sink> {
     let default_sink = std::process::Command::new("pactl")
-        .args(["get-default-sink"]).output()
+        .args(["get-default-sink"])
+        .output()
         .map(|o| String::from_utf8_lossy(&o.stdout).trim().to_string())
         .unwrap_or_default();
 
     let Ok(o) = std::process::Command::new("pactl")
-        .args(["-f", "json", "list", "sinks"]).output() else { return Vec::new() };
-    let Ok(sinks) = serde_json::from_slice::<Vec<serde_json::Value>>(&o.stdout) else { return Vec::new() };
+        .args(["-f", "json", "list", "sinks"])
+        .output()
+    else {
+        return Vec::new();
+    };
+    let Ok(sinks) = serde_json::from_slice::<Vec<serde_json::Value>>(&o.stdout) else {
+        return Vec::new();
+    };
 
-    sinks.into_iter().filter_map(|s| {
-        let index = s.get("index")?.as_u64()? as u32;
-        let name = s.get("name")?.as_str()?.to_string();
-        let description = s.get("description")?.as_str()?.to_string();
-        let muted = s.get("mute")?.as_bool()?;
-        let vol_obj = s.get("volume")?;
-        let first_channel = vol_obj.as_object()?.values().next()?;
-        let volume_pct = first_channel.get("value_percent")?.as_str()?
-            .trim_end_matches('%').parse::<u32>().ok()?;
-        Some(Sink { index, is_default: name == default_sink, name, description, volume_pct, muted })
-    }).collect()
+    sinks
+        .into_iter()
+        .filter_map(|s| {
+            let index = s.get("index")?.as_u64()? as u32;
+            let name = s.get("name")?.as_str()?.to_string();
+            let description = s.get("description")?.as_str()?.to_string();
+            let muted = s.get("mute")?.as_bool()?;
+            let vol_obj = s.get("volume")?;
+            let first_channel = vol_obj.as_object()?.values().next()?;
+            let volume_pct = first_channel
+                .get("value_percent")?
+                .as_str()?
+                .trim_end_matches('%')
+                .parse::<u32>()
+                .ok()?;
+            Some(Sink {
+                index,
+                is_default: name == default_sink,
+                name,
+                description,
+                volume_pct,
+                muted,
+            })
+        })
+        .collect()
 }
 
 fn query_sources() -> Vec<Source> {
     let default_source = std::process::Command::new("pactl")
-        .args(["get-default-source"]).output()
+        .args(["get-default-source"])
+        .output()
         .map(|o| String::from_utf8_lossy(&o.stdout).trim().to_string())
         .unwrap_or_default();
 
     let Ok(o) = std::process::Command::new("pactl")
-        .args(["-f", "json", "list", "sources"]).output() else { return Vec::new() };
-    let Ok(sources) = serde_json::from_slice::<Vec<serde_json::Value>>(&o.stdout) else { return Vec::new() };
+        .args(["-f", "json", "list", "sources"])
+        .output()
+    else {
+        return Vec::new();
+    };
+    let Ok(sources) = serde_json::from_slice::<Vec<serde_json::Value>>(&o.stdout) else {
+        return Vec::new();
+    };
 
-    sources.into_iter().filter_map(|s| {
-        let name = s.get("name")?.as_str()?.to_string();
-        // Skip monitor sources (they mirror sinks)
-        if name.contains(".monitor") { return None; }
-        let index = s.get("index")?.as_u64()? as u32;
-        let description = s.get("description")?.as_str()?.to_string();
-        let muted = s.get("mute")?.as_bool()?;
-        let vol_obj = s.get("volume")?;
-        let first_channel = vol_obj.as_object()?.values().next()?;
-        let volume_pct = first_channel.get("value_percent")?.as_str()?
-            .trim_end_matches('%').parse::<u32>().ok()?;
-        Some(Source { index, is_default: name == default_source, name, description, volume_pct, muted })
-    }).collect()
+    sources
+        .into_iter()
+        .filter_map(|s| {
+            let name = s.get("name")?.as_str()?.to_string();
+            // Skip monitor sources (they mirror sinks)
+            if name.contains(".monitor") {
+                return None;
+            }
+            let index = s.get("index")?.as_u64()? as u32;
+            let description = s.get("description")?.as_str()?.to_string();
+            let muted = s.get("mute")?.as_bool()?;
+            let vol_obj = s.get("volume")?;
+            let first_channel = vol_obj.as_object()?.values().next()?;
+            let volume_pct = first_channel
+                .get("value_percent")?
+                .as_str()?
+                .trim_end_matches('%')
+                .parse::<u32>()
+                .ok()?;
+            Some(Source {
+                index,
+                is_default: name == default_source,
+                name,
+                description,
+                volume_pct,
+                muted,
+            })
+        })
+        .collect()
 }
 
 fn query_full_state() -> AudioState {
     let (volume, muted) = query_volume();
-    AudioState { volume, muted, sinks: query_sinks(), sources: query_sources() }
+    AudioState {
+        volume,
+        muted,
+        sinks: query_sinks(),
+        sources: query_sources(),
+    }
 }
 
 fn audio_server() -> &'static AudioServer {
     static SERVER: OnceLock<AudioServer> = OnceLock::new();
     SERVER.get_or_init(|| {
         let state = Arc::new(Mutex::new(query_full_state()));
-        let subscribers: Arc<Mutex<Vec<async_channel::Sender<()>>>> = Arc::new(Mutex::new(Vec::new()));
+        let subscribers: Arc<Mutex<Vec<async_channel::Sender<()>>>> =
+            Arc::new(Mutex::new(Vec::new()));
         let ev_state = state.clone();
         let ev_subs = subscribers.clone();
 
-        std::thread::Builder::new().name("audio-monitor".into()).spawn(move || loop {
-            use std::os::unix::process::CommandExt;
-            let mut cmd = std::process::Command::new("pactl");
-            cmd.arg("subscribe").stdout(std::process::Stdio::piped());
-            // Kill this long-lived child when the parent dies instead of
-            // leaving it orphaned to init.
-            unsafe {
-                cmd.pre_exec(|| {
-                    libc::prctl(libc::PR_SET_PDEATHSIG, libc::SIGTERM);
-                    Ok(())
-                });
-            }
-            let Ok(mut child) = cmd.spawn()
-            else { std::thread::sleep(Duration::from_secs(5)); continue };
+        std::thread::Builder::new()
+            .name("audio-monitor".into())
+            .spawn(move || {
+                loop {
+                    use std::os::unix::process::CommandExt;
+                    let mut cmd = std::process::Command::new("pactl");
+                    cmd.arg("subscribe").stdout(std::process::Stdio::piped());
+                    // Kill this long-lived child when the parent dies instead of
+                    // leaving it orphaned to init.
+                    unsafe {
+                        cmd.pre_exec(|| {
+                            libc::prctl(libc::PR_SET_PDEATHSIG, libc::SIGTERM);
+                            Ok(())
+                        });
+                    }
+                    let Ok(mut child) = cmd.spawn() else {
+                        std::thread::sleep(Duration::from_secs(5));
+                        continue;
+                    };
 
-            let stdout = child.stdout.take().unwrap();
-            for line in std::io::BufReader::new(stdout).lines() {
-                let Ok(line) = line else { break };
-                if line.contains("sink") || line.contains("server") {
-                    *ev_state.lock().unwrap() = query_full_state();
-                    let mut subs = ev_subs.lock().unwrap();
-                    subs.retain(|tx| !tx.is_closed());
-                    for tx in subs.iter() { let _ = tx.try_send(()); }
+                    let stdout = child.stdout.take().unwrap();
+                    for line in std::io::BufReader::new(stdout).lines() {
+                        let Ok(line) = line else { break };
+                        if line.contains("sink") || line.contains("server") {
+                            *ev_state.lock().unwrap() = query_full_state();
+                            let mut subs = ev_subs.lock().unwrap();
+                            subs.retain(|tx| !tx.is_closed());
+                            for tx in subs.iter() {
+                                let _ = tx.try_send(());
+                            }
+                        }
+                    }
+                    let _ = child.wait();
+                    std::thread::sleep(Duration::from_secs(1));
                 }
-            }
-            let _ = child.wait();
-            std::thread::sleep(Duration::from_secs(1));
-        }).expect("failed to spawn audio monitor");
+            })
+            .expect("failed to spawn audio monitor");
 
         AudioServer { state, subscribers }
     })
@@ -181,7 +244,10 @@ impl Volume {
         } else if self.state.volume < 0.33 {
             concat!(env!("CARGO_MANIFEST_DIR"), "/assets/icons/volume-low.svg")
         } else if self.state.volume < 0.66 {
-            concat!(env!("CARGO_MANIFEST_DIR"), "/assets/icons/volume-medium.svg")
+            concat!(
+                env!("CARGO_MANIFEST_DIR"),
+                "/assets/icons/volume-medium.svg"
+            )
         } else {
             concat!(env!("CARGO_MANIFEST_DIR"), "/assets/icons/volume-high.svg")
         }
@@ -199,13 +265,25 @@ impl BarWidget for Volume {
         cx.spawn(async move |this, cx| {
             while rx.recv().await.is_ok() {
                 let new_state = server_state.lock().unwrap().clone();
-                if this.update(cx, |this, cx| { this.state = new_state; cx.notify(); }).is_err() {
+                if this
+                    .update(cx, |this, cx| {
+                        this.state = new_state;
+                        cx.notify();
+                    })
+                    .is_err()
+                {
                     break;
                 }
             }
-        }).detach();
+        })
+        .detach();
 
-        Self { state: initial, hovered: false, show_expanded: false, ever_expanded: false }
+        Self {
+            state: initial,
+            hovered: false,
+            show_expanded: false,
+            ever_expanded: false,
+        }
     }
 
     fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
@@ -239,18 +317,39 @@ impl BarWidget for Volume {
                     .w(px(collapsed_w))
                     .flex_shrink_0()
                     .child(
-                        svg().external_path(self.icon_path().to_string())
-                            .size(px(icon_size)).text_color(rgb(t.fg)).flex_shrink_0(),
+                        svg()
+                            .external_path(self.icon_path().to_string())
+                            .size(px(icon_size))
+                            .text_color(rgb(t.fg))
+                            .flex_shrink_0(),
                     ),
             )
             .child(
-                div().flex().items_center().gap(px(4.0)).pr(px(8.0))
+                div()
+                    .flex()
+                    .items_center()
+                    .gap(px(4.0))
+                    .pr(px(8.0))
                     .child(
-                        div().w(px(32.0)).h(px(3.0)).rounded_full().bg(rgb(t.border)).flex_shrink_0()
-                            .child(div().w(px(32.0 * vol_fill)).h_full().rounded_full().bg(rgb(bar_color))),
+                        div()
+                            .w(px(32.0))
+                            .h(px(3.0))
+                            .rounded_full()
+                            .bg(rgb(t.border))
+                            .flex_shrink_0()
+                            .child(
+                                div()
+                                    .w(px(32.0 * vol_fill))
+                                    .h_full()
+                                    .rounded_full()
+                                    .bg(rgb(bar_color)),
+                            ),
                     )
                     .child(
-                        div().text_xs().text_color(rgb(t.text_dim)).flex_shrink_0()
+                        div()
+                            .text_xs()
+                            .text_color(rgb(t.text_dim))
+                            .flex_shrink_0()
                             .child(format!("{:>3}%", volume_pct)),
                     ),
             );
@@ -300,7 +399,8 @@ impl BarWidget for Volume {
                                         cx.notify();
                                     }
                                 });
-                            }).detach();
+                            })
+                            .detach();
                         } else {
                             let entity = cx.weak_entity();
                             cx.spawn(async move |_this, cx| {
@@ -314,29 +414,40 @@ impl BarWidget for Volume {
                                         cx.notify();
                                     }
                                 });
-                            }).detach();
+                            })
+                            .detach();
                         }
                     });
                 }
             })
             .on_scroll_wheel(move |event: &ScrollWheelEvent, _window, _cx| {
                 let delta = event.delta.pixel_delta(px(1.0));
-                let step = if f32::from(delta.y) > 0.0 { "5%+" } else { "5%-" };
+                let step = if f32::from(delta.y) > 0.0 {
+                    "5%+"
+                } else {
+                    "5%-"
+                };
                 std::thread::spawn(move || {
                     let _ = std::process::Command::new("wpctl")
-                        .args(["set-volume", "-l", "1.0", "@DEFAULT_AUDIO_SINK@", step]).output();
+                        .args(["set-volume", "-l", "1.0", "@DEFAULT_AUDIO_SINK@", step])
+                        .output();
                 });
             })
             // Click to toggle mute
             .on_mouse_down(MouseButton::Left, move |_event, _window, _cx| {
                 std::thread::spawn(|| {
                     let _ = std::process::Command::new("wpctl")
-                        .args(["set-mute", "@DEFAULT_AUDIO_SINK@", "toggle"]).output();
+                        .args(["set-mute", "@DEFAULT_AUDIO_SINK@", "toggle"])
+                        .output();
                 });
             })
             .child(content)
             .with_animation(
-                if expanded { "vol-expand" } else { "vol-collapse" },
+                if expanded {
+                    "vol-expand"
+                } else {
+                    "vol-collapse"
+                },
                 Animation::new(Duration::from_millis(if expanded { 400 } else { 300 }))
                     .with_easing(if expanded { ease_expand } else { ease_collapse }),
                 move |el, progress| {

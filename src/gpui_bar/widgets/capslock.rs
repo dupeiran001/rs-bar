@@ -110,7 +110,11 @@ fn find_capslock_device() -> Option<PathBuf> {
         // Does it have LED_CAPSL?
         let mut led_bits = [0u8; 1];
         if unsafe {
-            libc::ioctl(raw, eviocgbit(EV_LED, led_bits.len()), led_bits.as_mut_ptr())
+            libc::ioctl(
+                raw,
+                eviocgbit(EV_LED, led_bits.len()),
+                led_bits.as_mut_ptr(),
+            )
         } < 0
         {
             continue;
@@ -157,7 +161,10 @@ impl BarWidget for CapsLock {
 
                     let epfd = unsafe { libc::epoll_create1(libc::EPOLL_CLOEXEC) };
                     if epfd < 0 {
-                        log::warn!("capslock: epoll_create1: {}", std::io::Error::last_os_error());
+                        log::warn!(
+                            "capslock: epoll_create1: {}",
+                            std::io::Error::last_os_error()
+                        );
                         return;
                     }
                     let epfd = unsafe { OwnedFd::from_raw_fd(epfd) };
@@ -178,9 +185,8 @@ impl BarWidget for CapsLock {
 
                     loop {
                         let mut out = [libc::epoll_event { events: 0, u64: 0 }; 1];
-                        let n = unsafe {
-                            libc::epoll_wait(epfd.as_raw_fd(), out.as_mut_ptr(), 1, -1)
-                        };
+                        let n =
+                            unsafe { libc::epoll_wait(epfd.as_raw_fd(), out.as_mut_ptr(), 1, -1) };
                         if n < 0 {
                             if std::io::Error::last_os_error().kind()
                                 == std::io::ErrorKind::Interrupted

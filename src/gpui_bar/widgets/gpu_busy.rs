@@ -23,7 +23,10 @@ enum GpuBusySource {
 }
 
 fn detect_gpu_busy() -> Option<GpuBusySource> {
-    for entry in std::fs::read_dir("/sys/class/drm").ok()?.filter_map(Result::ok) {
+    for entry in std::fs::read_dir("/sys/class/drm")
+        .ok()?
+        .filter_map(Result::ok)
+    {
         let dev = entry.path().join("device");
         if !dev.is_dir() {
             continue;
@@ -46,7 +49,10 @@ fn detect_gpu_busy() -> Option<GpuBusySource> {
         }
         // xe driver (Intel Battlemage / Arc): use gtidle residency
         if vendor.trim() == "0x8086" {
-            for tile in std::fs::read_dir(dev.join("tile0")).ok()?.filter_map(Result::ok) {
+            for tile in std::fs::read_dir(dev.join("tile0"))
+                .ok()?
+                .filter_map(Result::ok)
+            {
                 let residency = tile.path().join("gtidle/idle_residency_ms");
                 if residency.exists() && std::fs::read_to_string(&residency).is_ok() {
                     return Some(GpuBusySource::Residency { path: residency });
@@ -88,21 +94,41 @@ fn broadcast() -> Option<&'static Broadcast<u32>> {
 
 fn gpu_busy_monitor(src: GpuBusySource, bc: Broadcast<u32>) {
     let tfd = unsafe { libc::timerfd_create(libc::CLOCK_MONOTONIC, libc::TFD_CLOEXEC) };
-    if tfd < 0 { return; }
+    if tfd < 0 {
+        return;
+    }
     let tfd = unsafe { OwnedFd::from_raw_fd(tfd) };
 
     let spec = libc::itimerspec {
-        it_interval: libc::timespec { tv_sec: 1, tv_nsec: 0 },
-        it_value: libc::timespec { tv_sec: 0, tv_nsec: 1 },
+        it_interval: libc::timespec {
+            tv_sec: 1,
+            tv_nsec: 0,
+        },
+        it_value: libc::timespec {
+            tv_sec: 0,
+            tv_nsec: 1,
+        },
     };
     unsafe { libc::timerfd_settime(tfd.as_raw_fd(), 0, &spec, std::ptr::null_mut()) };
 
     let epfd = unsafe { libc::epoll_create1(libc::EPOLL_CLOEXEC) };
-    if epfd < 0 { return; }
+    if epfd < 0 {
+        return;
+    }
     let epfd = unsafe { OwnedFd::from_raw_fd(epfd) };
 
-    let mut ev = libc::epoll_event { events: libc::EPOLLIN as u32, u64: 0 };
-    unsafe { libc::epoll_ctl(epfd.as_raw_fd(), libc::EPOLL_CTL_ADD, tfd.as_raw_fd(), &mut ev) };
+    let mut ev = libc::epoll_event {
+        events: libc::EPOLLIN as u32,
+        u64: 0,
+    };
+    unsafe {
+        libc::epoll_ctl(
+            epfd.as_raw_fd(),
+            libc::EPOLL_CTL_ADD,
+            tfd.as_raw_fd(),
+            &mut ev,
+        )
+    };
 
     let mut prev_residency: Option<u64> = match &src {
         GpuBusySource::Residency { path } => read_residency_ms(path),
@@ -113,7 +139,9 @@ fn gpu_busy_monitor(src: GpuBusySource, bc: Broadcast<u32>) {
         let mut out = [libc::epoll_event { events: 0, u64: 0 }; 1];
         let n = unsafe { libc::epoll_wait(epfd.as_raw_fd(), out.as_mut_ptr(), 1, -1) };
         if n < 0 {
-            if std::io::Error::last_os_error().kind() == std::io::ErrorKind::Interrupted { continue; }
+            if std::io::Error::last_os_error().kind() == std::io::ErrorKind::Interrupted {
+                continue;
+            }
             break;
         }
         let mut buf = [0u8; 8];
@@ -168,7 +196,8 @@ impl BarWidget for GpuBusy {
                         break;
                     }
                 }
-            }).detach();
+            })
+            .detach();
         }
 
         Self {
@@ -177,7 +206,9 @@ impl BarWidget for GpuBusy {
         }
     }
 
-    fn set_grouped(&mut self) { self.grouped = true; }
+    fn set_grouped(&mut self) {
+        self.grouped = true;
+    }
 
     fn render(&mut self, _window: &mut Window, _cx: &mut Context<Self>) -> impl IntoElement {
         let t = crate::gpui_bar::config::THEME();

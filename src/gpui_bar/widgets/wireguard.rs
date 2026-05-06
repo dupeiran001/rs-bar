@@ -67,8 +67,7 @@ impl BarWidget for Wireguard {
                                 Ok(())
                             });
                         }
-                        let Ok(mut child) = cmd.spawn()
-                        else {
+                        let Ok(mut child) = cmd.spawn() else {
                             std::thread::sleep(backoff);
                             backoff = (backoff * 2).min(max_backoff);
                             continue;
@@ -121,7 +120,9 @@ impl BarWidget for Wireguard {
         }
     }
 
-    fn set_grouped(&mut self) { self.grouped = true; }
+    fn set_grouped(&mut self) {
+        self.grouped = true;
+    }
 
     fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let t = crate::gpui_bar::config::THEME();
@@ -140,12 +141,18 @@ impl BarWidget for Wireguard {
         let (click_tx, click_rx) = async_channel::bounded::<bool>(1);
         cx.spawn(async move |this, cx| {
             while let Ok(new_state) = click_rx.recv().await {
-                if this.update(cx, |this, cx| {
-                    this.active = new_state;
-                    cx.notify();
-                }).is_err() { break; }
+                if this
+                    .update(cx, |this, cx| {
+                        this.active = new_state;
+                        cx.notify();
+                    })
+                    .is_err()
+                {
+                    break;
+                }
             }
-        }).detach();
+        })
+        .detach();
 
         let content_h = crate::gpui_bar::config::CONTENT_HEIGHT();
         let button_h = content_h - 4.0;
@@ -165,25 +172,25 @@ impl BarWidget for Wireguard {
                 ),
             self.grouped,
         )
-            .id("wireguard")
-            .cursor_pointer()
-            .hover(|s| s.bg(rgb(t.bg_dark)))
-            .on_mouse_down(MouseButton::Left, move |_event, _window, _cx| {
-                let conn = conn.clone();
-                let tx = click_tx.clone();
-                std::thread::spawn(move || {
-                    if active {
-                        let _ = std::process::Command::new("nmcli")
-                            .args(["con", "down", "id", &conn])
-                            .output();
-                    } else {
-                        let _ = std::process::Command::new("nmcli")
-                            .args(["con", "up", "id", &conn])
-                            .output();
-                    }
-                    let _ = tx.send_blocking(query_active(&conn));
-                });
-            })
+        .id("wireguard")
+        .cursor_pointer()
+        .hover(|s| s.bg(rgb(t.bg_dark)))
+        .on_mouse_down(MouseButton::Left, move |_event, _window, _cx| {
+            let conn = conn.clone();
+            let tx = click_tx.clone();
+            std::thread::spawn(move || {
+                if active {
+                    let _ = std::process::Command::new("nmcli")
+                        .args(["con", "down", "id", &conn])
+                        .output();
+                } else {
+                    let _ = std::process::Command::new("nmcli")
+                        .args(["con", "up", "id", &conn])
+                        .output();
+                }
+                let _ = tx.send_blocking(query_active(&conn));
+            });
+        })
     }
 }
 

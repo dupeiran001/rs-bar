@@ -55,17 +55,16 @@ impl BarPopoverBuilder {
     /// it in.
     pub fn build(self, content: &impl IsA<gtk::Widget>) -> BarPopover {
         set_liquid_child(&self.popover, content);
-        let bp = BarPopover { popover: self.popover };
+        let bp = BarPopover {
+            popover: self.popover,
+        };
         bp.install_entrance_animation();
         bp
     }
 }
 
 impl BarPopover {
-    pub fn builder(
-        parent: &impl IsA<gtk::Widget>,
-        css_class: &str,
-    ) -> BarPopoverBuilder {
+    pub fn builder(parent: &impl IsA<gtk::Widget>, css_class: &str) -> BarPopoverBuilder {
         BarPopoverBuilder::new(parent, css_class)
     }
 

@@ -305,10 +305,8 @@ fn read_signal_nl80211(iface: &str) -> Option<u32> {
                 let attr_end = off + msg_len;
                 let mut aoff = attr_start;
                 while aoff + 4 <= attr_end {
-                    let nla_len =
-                        u16::from_ne_bytes([data[aoff], data[aoff + 1]]) as usize;
-                    let nla_type =
-                        u16::from_ne_bytes([data[aoff + 2], data[aoff + 3]]) & 0x7FFF;
+                    let nla_len = u16::from_ne_bytes([data[aoff], data[aoff + 1]]) as usize;
+                    let nla_type = u16::from_ne_bytes([data[aoff + 2], data[aoff + 3]]) & 0x7FFF;
                     if nla_len < 4 {
                         break;
                     }
@@ -515,8 +513,10 @@ const WIFI_OFF: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/assets/icons/wifi-o
 const WIFI_WEAK: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/assets/icons/wifi-weak.svg");
 const WIFI_FAIR: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/assets/icons/wifi-fair.svg");
 const WIFI_GOOD: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/assets/icons/wifi-good.svg");
-const WIFI_EXCELLENT: &str =
-    concat!(env!("CARGO_MANIFEST_DIR"), "/assets/icons/wifi-excellent.svg");
+const WIFI_EXCELLENT: &str = concat!(
+    env!("CARGO_MANIFEST_DIR"),
+    "/assets/icons/wifi-excellent.svg"
+);
 
 fn wifi_icon(state: &WifiState) -> &'static str {
     match state {

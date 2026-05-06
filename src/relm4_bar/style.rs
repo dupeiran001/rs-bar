@@ -60,7 +60,9 @@ fn theme_color_block() -> String {
 }
 
 fn user_css_path() -> PathBuf {
-    let home = std::env::var_os("HOME").map(PathBuf::from).unwrap_or_default();
+    let home = std::env::var_os("HOME")
+        .map(PathBuf::from)
+        .unwrap_or_default();
     home.join(".config").join("rs-bar").join("gtk-theme.css")
 }
 

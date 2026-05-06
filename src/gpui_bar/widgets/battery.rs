@@ -12,8 +12,8 @@ use gpui::{
     StatefulInteractiveElement, Styled, Window, div, px, rgb, svg,
 };
 
-use super::{BarWidget, impl_render};
 use super::power_draw;
+use super::{BarWidget, impl_render};
 
 // ── battery state ───────────────────────────────────────────────────────
 
@@ -184,7 +184,11 @@ impl BarWidget for Battery {
                 } else {
                     t.red
                 };
-                let ic = if s.charging { ICON_CHARGING } else { ICON_BATTERY };
+                let ic = if s.charging {
+                    ICON_CHARGING
+                } else {
+                    ICON_BATTERY
+                };
                 (
                     ic,
                     lc,
@@ -197,13 +201,35 @@ impl BarWidget for Battery {
                     (s.percent as f32 / 100.0).min(1.0),
                 )
             } else {
-                (ICON_BATTERY, t.fg_dark, false, 0, 0.0, "--".into(), 0.0, 0.0, 0.0)
+                (
+                    ICON_BATTERY,
+                    t.fg_dark,
+                    false,
+                    0,
+                    0.0,
+                    "--".into(),
+                    0.0,
+                    0.0,
+                    0.0,
+                )
             };
 
         // Expanded content: bar(32) + pct + watts + time + health + capacity
         let expanded_w = if has_data {
-            collapsed_w + 4.0 + 32.0 + 4.0 + 28.0 + 4.0 + 36.0 + 4.0 + 40.0 + 4.0 + 36.0 + 4.0
-                + 40.0 + 8.0
+            collapsed_w
+                + 4.0
+                + 32.0
+                + 4.0
+                + 28.0
+                + 4.0
+                + 36.0
+                + 4.0
+                + 40.0
+                + 4.0
+                + 36.0
+                + 4.0
+                + 40.0
+                + 8.0
         } else {
             collapsed_w
         };

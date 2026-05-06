@@ -70,8 +70,7 @@ fn bt_monitor(tx: async_channel::Sender<BtState>, shared: Arc<Mutex<BtState>>) {
                 Ok(())
             });
         }
-        let Ok(mut child) = cmd.spawn()
-        else {
+        let Ok(mut child) = cmd.spawn() else {
             log::warn!("bluetooth: bluetoothctl not found, retrying in {backoff:?}");
             std::thread::sleep(backoff);
             backoff = (backoff * 2).min(max_backoff);
@@ -99,10 +98,7 @@ fn bt_monitor(tx: async_channel::Sender<BtState>, shared: Arc<Mutex<BtState>>) {
             events: libc::EPOLLIN as u32,
             u64: 0,
         };
-        if unsafe {
-            libc::epoll_ctl(epfd.as_raw_fd(), libc::EPOLL_CTL_ADD, raw_fd, &mut ev)
-        } < 0
-        {
+        if unsafe { libc::epoll_ctl(epfd.as_raw_fd(), libc::EPOLL_CTL_ADD, raw_fd, &mut ev) } < 0 {
             let _ = child.kill();
             let _ = child.wait();
             continue;
@@ -116,8 +112,7 @@ fn bt_monitor(tx: async_channel::Sender<BtState>, shared: Arc<Mutex<BtState>>) {
 
         'outer: loop {
             let mut out = [libc::epoll_event { events: 0, u64: 0 }; 1];
-            let n =
-                unsafe { libc::epoll_wait(epfd.as_raw_fd(), out.as_mut_ptr(), 1, -1) };
+            let n = unsafe { libc::epoll_wait(epfd.as_raw_fd(), out.as_mut_ptr(), 1, -1) };
             if n < 0 {
                 if std::io::Error::last_os_error().kind() == std::io::ErrorKind::Interrupted {
                     continue;
@@ -127,9 +122,7 @@ fn bt_monitor(tx: async_channel::Sender<BtState>, shared: Arc<Mutex<BtState>>) {
 
             // Drain readable bytes, split into lines
             loop {
-                let n = unsafe {
-                    libc::read(raw_fd, read_buf.as_mut_ptr().cast(), read_buf.len())
-                };
+                let n = unsafe { libc::read(raw_fd, read_buf.as_mut_ptr().cast(), read_buf.len()) };
                 if n <= 0 {
                     if n == 0 {
                         break 'outer; // EOF — bluetoothctl exited
@@ -149,14 +142,10 @@ fn bt_monitor(tx: async_channel::Sender<BtState>, shared: Arc<Mutex<BtState>>) {
                         } else if line.contains("Powered: no") && *state != BtState::Off {
                             *state = BtState::Off;
                             changed = true;
-                        } else if line.contains("Connected: yes")
-                            && *state != BtState::Connected
-                        {
+                        } else if line.contains("Connected: yes") && *state != BtState::Connected {
                             *state = BtState::Connected;
                             changed = true;
-                        } else if line.contains("Connected: no")
-                            && *state == BtState::Connected
-                        {
+                        } else if line.contains("Connected: no") && *state == BtState::Connected {
                             *state = BtState::On;
                             changed = true;
                         }
@@ -182,7 +171,10 @@ fn bt_monitor(tx: async_channel::Sender<BtState>, shared: Arc<Mutex<BtState>>) {
         if started.elapsed() > Duration::from_secs(5) {
             backoff = Duration::from_secs(1);
         }
-        log::debug!("bluetooth: bluetoothctl exited after {:?}, retrying in {backoff:?}", started.elapsed());
+        log::debug!(
+            "bluetooth: bluetoothctl exited after {:?}, retrying in {backoff:?}",
+            started.elapsed()
+        );
         std::thread::sleep(backoff);
         backoff = (backoff * 2).min(max_backoff);
     }
@@ -190,9 +182,15 @@ fn bt_monitor(tx: async_channel::Sender<BtState>, shared: Arc<Mutex<BtState>>) {
 
 // ── widget ─────────────────────────────────────────────────────────────
 
-const BT_OFF: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/assets/icons/bluetooth-off.svg");
+const BT_OFF: &str = concat!(
+    env!("CARGO_MANIFEST_DIR"),
+    "/assets/icons/bluetooth-off.svg"
+);
 const BT_ON: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/assets/icons/bluetooth-on.svg");
-const BT_CONNECTED: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/assets/icons/bluetooth-connected.svg");
+const BT_CONNECTED: &str = concat!(
+    env!("CARGO_MANIFEST_DIR"),
+    "/assets/icons/bluetooth-connected.svg"
+);
 
 fn bt_icon(state: &BtState) -> &'static str {
     match state {
@@ -249,10 +247,15 @@ impl BarWidget for Bluetooth {
         })
         .detach();
 
-        Self { state: initial, grouped: false }
+        Self {
+            state: initial,
+            grouped: false,
+        }
     }
 
-    fn set_grouped(&mut self) { self.grouped = true; }
+    fn set_grouped(&mut self) {
+        self.grouped = true;
+    }
 
     fn render(&mut self, _window: &mut Window, _cx: &mut Context<Self>) -> impl IntoElement {
         let t = crate::gpui_bar::config::THEME();

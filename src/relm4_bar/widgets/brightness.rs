@@ -156,9 +156,7 @@ impl SimpleComponent for Brightness {
         // issues exactly one BRIGHTNESS_UP/DOWN_CMD() invocation; the
         // configured command itself defines the step size.
         {
-            let scroll = gtk::EventControllerScroll::new(
-                gtk::EventControllerScrollFlags::VERTICAL,
-            );
+            let scroll = gtk::EventControllerScroll::new(gtk::EventControllerScrollFlags::VERTICAL);
             scroll.connect_scroll(move |_, _dx, dy| {
                 if dy < 0.0 {
                     hub::brightness::brightness_up();

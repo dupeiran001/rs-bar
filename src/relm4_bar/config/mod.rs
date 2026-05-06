@@ -2,8 +2,8 @@ use std::sync::OnceLock;
 
 use crate::relm4_bar::theme::Theme;
 
-mod macbook;
 mod intel;
+mod macbook;
 
 #[allow(dead_code)]
 pub struct Config {
@@ -63,41 +63,74 @@ pub fn init() {
 }
 
 pub fn get() -> &'static Config {
-    CONFIG.get().expect("config::init() must be called before get()")
+    CONFIG
+        .get()
+        .expect("config::init() must be called before get()")
 }
 
 pub fn profile() -> &'static str {
-    PROFILE.get().expect("config::init() must be called").as_str()
+    PROFILE
+        .get()
+        .expect("config::init() must be called")
+        .as_str()
 }
 
 #[allow(non_snake_case)]
-pub fn THEME() -> &'static Theme { get().theme }
+pub fn THEME() -> &'static Theme {
+    get().theme
+}
 #[allow(non_snake_case, dead_code)]
-pub fn FONT_FAMILY() -> &'static str { get().font_family }
+pub fn FONT_FAMILY() -> &'static str {
+    get().font_family
+}
 #[allow(non_snake_case, dead_code)]
-pub fn ICON_THEME() -> &'static str { get().icon_theme }
+pub fn ICON_THEME() -> &'static str {
+    get().icon_theme
+}
 #[allow(non_snake_case, dead_code)]
-pub fn ICON_SIZE() -> f32 { get().icon_size }
+pub fn ICON_SIZE() -> f32 {
+    get().icon_size
+}
 #[allow(non_snake_case, dead_code)]
-pub fn POWER_COMMAND() -> &'static str { get().power_command }
+pub fn POWER_COMMAND() -> &'static str {
+    get().power_command
+}
 #[allow(non_snake_case, dead_code)]
-pub fn BRIGHTNESS_GET_CMD() -> &'static str { get().brightness_get_cmd }
+pub fn BRIGHTNESS_GET_CMD() -> &'static str {
+    get().brightness_get_cmd
+}
 #[allow(non_snake_case, dead_code)]
-pub fn BRIGHTNESS_UP_CMD() -> &'static str { get().brightness_up_cmd }
+pub fn BRIGHTNESS_UP_CMD() -> &'static str {
+    get().brightness_up_cmd
+}
 #[allow(non_snake_case, dead_code)]
-pub fn BRIGHTNESS_DOWN_CMD() -> &'static str { get().brightness_down_cmd }
+pub fn BRIGHTNESS_DOWN_CMD() -> &'static str {
+    get().brightness_down_cmd
+}
 #[allow(non_snake_case, dead_code)]
-pub fn POWER_ICON() -> &'static str { get().power_icon }
+pub fn POWER_ICON() -> &'static str {
+    get().power_icon
+}
 #[allow(non_snake_case, dead_code)]
-pub fn WIREGUARD_CONNECTION() -> &'static str { get().wireguard_connection }
+pub fn WIREGUARD_CONNECTION() -> &'static str {
+    get().wireguard_connection
+}
 #[allow(non_snake_case)]
-pub fn BAR_HEIGHT() -> f32 { get().bar_height }
+pub fn BAR_HEIGHT() -> f32 {
+    get().bar_height
+}
 #[allow(non_snake_case, dead_code)]
-pub fn CONTENT_HEIGHT() -> f32 { get().content_height() }
+pub fn CONTENT_HEIGHT() -> f32 {
+    get().content_height()
+}
 #[allow(non_snake_case, dead_code)]
-pub fn BORDER_TOP() -> u32 { get().border_top }
+pub fn BORDER_TOP() -> u32 {
+    get().border_top
+}
 #[allow(non_snake_case, dead_code)]
-pub fn BORDER_BOTTOM() -> u32 { get().border_bottom }
+pub fn BORDER_BOTTOM() -> u32 {
+    get().border_bottom
+}
 
 // Bar layout — five zones, each a Vec<Widget>. The widgets!() and group!()
 // macros (defined in widgets/mod.rs) build these vectors.

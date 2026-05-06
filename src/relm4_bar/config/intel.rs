@@ -34,7 +34,11 @@ pub(super) fn config() -> Config {
 pub(super) fn bar() -> BarLayout {
     BarLayout {
         left: widgets!(Workspaces, Minimap, WindowTitle),
-        center_left: widgets!(group!(CpuFreqGraph, |, CpuFreq), group!(CpuUsage, |, CpuTemp), Memory),
+        center_left: widgets!(
+            group!(CpuFreqGraph, |, CpuFreq),
+            group!(CpuUsage, |, CpuTemp),
+            Memory
+        ),
         center: widgets!(Clock),
         center_right: widgets!(
             Wifi,
@@ -42,8 +46,6 @@ pub(super) fn bar() -> BarLayout {
             PkgUpdate,
             group!(GpuDraw, |, CpuDraw, |, GpuBusy)
         ),
-        right: widgets!(
-            Wireguard, Volume, Brightness, Tray, Fcitx, CapsLock, Power
-        ),
+        right: widgets!(Wireguard, Volume, Brightness, Tray, Fcitx, CapsLock, Power),
     }
 }

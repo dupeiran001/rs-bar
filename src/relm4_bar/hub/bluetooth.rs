@@ -230,10 +230,7 @@ fn monitor_thread(producer: watch::Sender<BluetoothState>) {
                 for line in reader.lines().map_while(Result::ok) {
                     // Any `[CHG]` line is a state change worth re-snapshotting.
                     // `Connected: yes/no`, `Powered: yes/no`, `Paired:`, etc.
-                    if line.contains("[CHG]")
-                        || line.contains("[NEW]")
-                        || line.contains("[DEL]")
-                    {
+                    if line.contains("[CHG]") || line.contains("[NEW]") || line.contains("[DEL]") {
                         let _ = trigger_tx.try_send(());
                     }
                 }

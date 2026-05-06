@@ -105,28 +105,22 @@ fn query_debian() -> u32 {
         .env("LANG", "C")
         .output();
     match output {
-        Ok(o) => {
-            String::from_utf8_lossy(&o.stdout)
-                .lines()
-                .filter(|l| l.contains("upgradable"))
-                .count() as u32
-        }
+        Ok(o) => String::from_utf8_lossy(&o.stdout)
+            .lines()
+            .filter(|l| l.contains("upgradable"))
+            .count() as u32,
         Err(_) => 0,
     }
 }
 
 fn query_fedora() -> u32 {
     // dnf check-update exits 100 when updates available, 0 when none
-    let output = Command::new("dnf")
-        .args(["check-update", "-q"])
-        .output();
+    let output = Command::new("dnf").args(["check-update", "-q"]).output();
     match output {
-        Ok(o) => {
-            String::from_utf8_lossy(&o.stdout)
-                .lines()
-                .filter(|l| !l.is_empty() && !l.starts_with("Last metadata"))
-                .count() as u32
-        }
+        Ok(o) => String::from_utf8_lossy(&o.stdout)
+            .lines()
+            .filter(|l| !l.is_empty() && !l.starts_with("Last metadata"))
+            .count() as u32,
         Err(_) => 0,
     }
 }
@@ -179,9 +173,11 @@ impl BarWidget for PkgUpdate {
 
         std::thread::Builder::new()
             .name("pkg-update-poll".into())
-            .spawn(move || loop {
-                std::thread::sleep(Duration::from_secs(600));
-                let _ = tx.send_blocking(query_updates(distro));
+            .spawn(move || {
+                loop {
+                    std::thread::sleep(Duration::from_secs(600));
+                    let _ = tx.send_blocking(query_updates(distro));
+                }
             })
             .ok();
 
@@ -212,7 +208,9 @@ impl BarWidget for PkgUpdate {
         }
     }
 
-    fn set_grouped(&mut self) { self.grouped = true; }
+    fn set_grouped(&mut self) {
+        self.grouped = true;
+    }
 
     fn render(&mut self, _window: &mut Window, _cx: &mut Context<Self>) -> impl IntoElement {
         let t = crate::gpui_bar::config::THEME();

@@ -53,11 +53,13 @@ enum CoreLayout {
 fn detect_layout() -> CoreLayout {
     let mut p_cpus = Vec::new();
     let mut e_cpus = Vec::new();
-    let has_core_type =
-        Path::new("/sys/devices/system/cpu/cpu0/topology/core_type").exists();
+    let has_core_type = Path::new("/sys/devices/system/cpu/cpu0/topology/core_type").exists();
 
     if has_core_type {
-        for entry in std::fs::read_dir("/sys/devices/system/cpu").into_iter().flatten() {
+        for entry in std::fs::read_dir("/sys/devices/system/cpu")
+            .into_iter()
+            .flatten()
+        {
             let entry = match entry {
                 Ok(e) => e,
                 Err(_) => continue,
@@ -78,7 +80,10 @@ fn detect_layout() -> CoreLayout {
         }
     } else {
         let mut all_cpus: Vec<(u32, u64)> = Vec::new();
-        for entry in std::fs::read_dir("/sys/devices/system/cpu").into_iter().flatten() {
+        for entry in std::fs::read_dir("/sys/devices/system/cpu")
+            .into_iter()
+            .flatten()
+        {
             let entry = match entry {
                 Ok(e) => e,
                 Err(_) => continue,
@@ -89,12 +94,10 @@ fn detect_layout() -> CoreLayout {
                 Some(n) => n,
                 None => continue,
             };
-            let max_freq = std::fs::read_to_string(
-                entry.path().join("cpufreq/cpuinfo_max_freq"),
-            )
-            .ok()
-            .and_then(|s| s.trim().parse::<u64>().ok())
-            .unwrap_or(0);
+            let max_freq = std::fs::read_to_string(entry.path().join("cpufreq/cpuinfo_max_freq"))
+                .ok()
+                .and_then(|s| s.trim().parse::<u64>().ok())
+                .unwrap_or(0);
             if max_freq > 0 {
                 all_cpus.push((num, max_freq));
             }

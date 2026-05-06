@@ -1,6 +1,4 @@
-use gpui::{
-    Context, IntoElement, ParentElement, Styled, Window, div, px, rgb,
-};
+use gpui::{Context, IntoElement, ParentElement, Styled, Window, div, px, rgb};
 use uuid::Uuid;
 
 use super::{BarWidget, impl_render};
@@ -74,7 +72,9 @@ impl BarWidget for Minimap {
         // Get output dimensions for scaling
         let output_size = output_name.as_ref().and_then(|name| {
             self.outputs.iter().find(|o| &o.name == name).and_then(|o| {
-                o.logical.as_ref().map(|l| (l.width as f64, l.height as f64))
+                o.logical
+                    .as_ref()
+                    .map(|l| (l.width as f64, l.height as f64))
             })
         });
 
@@ -135,14 +135,8 @@ impl BarWidget for Minimap {
         }
 
         // Compute total bounds for scaling
-        let total_w = tiles
-            .iter()
-            .map(|t| t.x + t.w)
-            .fold(0.0_f64, f64::max);
-        let total_h = tiles
-            .iter()
-            .map(|t| t.y + t.h)
-            .fold(0.0_f64, f64::max);
+        let total_w = tiles.iter().map(|t| t.x + t.w).fold(0.0_f64, f64::max);
+        let total_h = tiles.iter().map(|t| t.y + t.h).fold(0.0_f64, f64::max);
 
         // Use actual tile bounds or output size, whichever is wider
         let (out_w, out_h) = output_size.unwrap_or((total_w.max(1.0), total_h.max(1.0)));

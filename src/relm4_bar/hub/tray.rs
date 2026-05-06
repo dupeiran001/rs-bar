@@ -164,20 +164,9 @@ pub fn invoke_menu(id: &str, menu_entry_id: i32) {
 
 /// Commands sent from widget threads to the hub thread.
 enum TrayCommand {
-    Activate {
-        address: String,
-        x: i32,
-        y: i32,
-    },
-    Secondary {
-        address: String,
-        x: i32,
-        y: i32,
-    },
-    InvokeMenu {
-        address: String,
-        menu_entry_id: i32,
-    },
+    Activate { address: String, x: i32, y: i32 },
+    Secondary { address: String, x: i32, y: i32 },
+    InvokeMenu { address: String, menu_entry_id: i32 },
 }
 
 fn command_sender() -> &'static OnceLock<async_channel::Sender<TrayCommand>> {
@@ -349,7 +338,10 @@ fn publish(
 
 fn build_item(address: &str, sni: &StatusNotifierItem, menu: Option<&TrayMenu>) -> TrayItem {
     let icon = sni.icon_pixmap.as_deref().and_then(decode_largest);
-    let attention_icon = sni.attention_icon_pixmap.as_deref().and_then(decode_largest);
+    let attention_icon = sni
+        .attention_icon_pixmap
+        .as_deref()
+        .and_then(decode_largest);
 
     let tooltip = sni.tool_tip.as_ref().and_then(|t| {
         if !t.title.is_empty() {

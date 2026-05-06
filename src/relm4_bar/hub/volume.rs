@@ -188,7 +188,10 @@ fn query_default(kind: &str) -> String {
 /// filter out monitor devices (PipeWire's loopback of every sink) so the mic
 /// dropdown only shows real input hardware.
 fn query_devices(kind: &str) -> Vec<DeviceInfo> {
-    let Ok(out) = Command::new("pactl").args(["-f", "json", "list", kind]).output() else {
+    let Ok(out) = Command::new("pactl")
+        .args(["-f", "json", "list", kind])
+        .output()
+    else {
         return Vec::new();
     };
     let Ok(arr) = serde_json::from_slice::<Vec<serde_json::Value>>(&out.stdout) else {
@@ -265,7 +268,10 @@ fn sender() -> &'static watch::Sender<VolumeState> {
                         let Ok(line) = line else { break };
                         // Filter to events that can affect the published
                         // state. `server` covers default-sink changes.
-                        if line.contains("sink") || line.contains("source") || line.contains("server") {
+                        if line.contains("sink")
+                            || line.contains("source")
+                            || line.contains("server")
+                        {
                             let new_state = query_full_state();
                             producer.send_if_modified(|cur| {
                                 if state_changed(cur, &new_state) {
