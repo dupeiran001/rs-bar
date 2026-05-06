@@ -100,16 +100,7 @@ impl SimpleComponent for WindowTitle {
         // Start hidden; un-hide on the first non-empty title.
         root.set_visible(false);
 
-        let mut rx = hub::niri::subscribe();
-        let s = sender.clone();
-        relm4::spawn_local(async move {
-            let snap = rx.borrow_and_update().clone();
-            s.input(WindowTitleMsg::Update(snap));
-            while rx.changed().await.is_ok() {
-                let snap = rx.borrow_and_update().clone();
-                s.input(WindowTitleMsg::Update(snap));
-            }
-        });
+        crate::subscribe_into_msg!(hub::niri::subscribe(), sender, WindowTitleMsg::Update);
 
         ComponentParts { model, widgets }
     }
@@ -117,9 +108,10 @@ impl SimpleComponent for WindowTitle {
     fn update(&mut self, msg: Self::Input, _sender: ComponentSender<Self>) {
         match msg {
             WindowTitleMsg::Update(snapshot) => {
-                let active_ws = snapshot.workspaces.iter().find(|ws| {
-                    ws.is_active && ws.output.as_deref() == Some(&self.connector)
-                });
+                let active_ws = snapshot
+                    .workspaces
+                    .iter()
+                    .find(|ws| ws.is_active && ws.output.as_deref() == Some(&self.connector));
 
                 let focused = active_ws.and_then(|ws| {
                     if let Some(id) = ws.active_window_id {
@@ -155,8 +147,7 @@ impl SimpleComponent for WindowTitle {
                 // Show/hide the whole capsule based on whether there's
                 // anything to render. An empty title with no icon means no
                 // focused window.
-                let has_content =
-                    !self.last_title.is_empty() || self.last_icon_path.is_some();
+                let has_content = !self.last_title.is_empty() || self.last_icon_path.is_some();
                 self.root.set_visible(has_content);
             }
         }
@@ -234,9 +225,7 @@ fn lookup_icon(app_id: &str) -> Option<PathBuf> {
 
     // 3. Direct hicolor scalable check (linicon may miss these)
     for name in &candidates {
-        let p = PathBuf::from(format!(
-            "/usr/share/icons/hicolor/scalable/apps/{name}.svg"
-        ));
+        let p = PathBuf::from(format!("/usr/share/icons/hicolor/scalable/apps/{name}.svg"));
         if p.exists() {
             return Some(p);
         }

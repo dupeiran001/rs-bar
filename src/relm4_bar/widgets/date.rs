@@ -18,7 +18,9 @@ use super::{NamedWidget, WidgetInit, capsule};
 
 const ICON_NAME: &str = "calendar-symbolic";
 
-fn format_date() -> String { Local::now().format("%m-%d").to_string() }
+fn format_date() -> String {
+    Local::now().format("%m-%d").to_string()
+}
 
 pub struct Date {
     /// Last-seen formatted string; updates short-circuit when unchanged.
@@ -73,10 +75,13 @@ impl SimpleComponent for Date {
         // 1 Hz wake — matches rs-bar. The `update` handler short-circuits when
         // the formatted value hasn't changed, so the GTK label is rewritten at
         // most once per day.
-        let s = sender.clone();
+        let s = sender.input_sender().clone();
         glib::timeout_add_local(Duration::from_secs(1), move || {
-            s.input(DateMsg::Tick);
-            glib::ControlFlow::Continue
+            if s.send(DateMsg::Tick).is_ok() {
+                glib::ControlFlow::Continue
+            } else {
+                glib::ControlFlow::Break
+            }
         });
 
         ComponentParts { model, widgets }

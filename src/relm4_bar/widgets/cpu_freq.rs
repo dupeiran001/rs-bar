@@ -84,19 +84,11 @@ impl SimpleComponent for CpuFreq {
 
         capsule(&root, model.grouped);
 
-        // Subscription: bridge the watch::Receiver<FreqReading> into messages.
-        let mut rx = hub::cpu_freq::subscribe();
-        let s = sender.clone();
-        relm4::spawn_local(async move {
-            // Push the initial value so the widget renders immediately, then
-            // loop on changes.
-            let initial = rx.borrow_and_update().display.clone();
-            s.input(CpuFreqMsg::Update(initial));
-            while rx.changed().await.is_ok() {
-                let display = rx.borrow_and_update().display.clone();
-                s.input(CpuFreqMsg::Update(display));
-            }
-        });
+        crate::subscribe_into_msg!(
+            hub::cpu_freq::subscribe(),
+            sender,
+            |reading: hub::cpu_freq::FreqReading| { CpuFreqMsg::Update(reading.display) }
+        );
 
         ComponentParts { model, widgets }
     }

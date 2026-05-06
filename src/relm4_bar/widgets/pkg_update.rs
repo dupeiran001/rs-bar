@@ -81,17 +81,7 @@ impl SimpleComponent for PkgUpdate {
 
         capsule(&root, model.grouped);
 
-        // Subscription: bridge the watch::Receiver<u32> into component messages.
-        // `relm4::spawn_local` runs on the GTK main context, so passing the
-        // ComponentSender across the await is safe.
-        let mut rx = hub::pkg_update::subscribe();
-        let s = sender.clone();
-        relm4::spawn_local(async move {
-            while rx.changed().await.is_ok() {
-                let v = *rx.borrow_and_update();
-                s.input(PkgUpdateMsg::Update(v));
-            }
-        });
+        crate::subscribe_into_msg!(hub::pkg_update::subscribe(), sender, PkgUpdateMsg::Update);
 
         ComponentParts { model, widgets }
     }

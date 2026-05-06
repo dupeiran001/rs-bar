@@ -74,17 +74,7 @@ impl SimpleComponent for CpuTemp {
 
         capsule(&root, model.grouped);
 
-        // Subscription: bridge the watch::Receiver<f32> into component messages.
-        // `relm4::spawn_local` runs on the GTK main context, so passing the
-        // ComponentSender across the await is safe.
-        let mut rx = hub::cpu_temp::subscribe();
-        let s = sender.clone();
-        relm4::spawn_local(async move {
-            while rx.changed().await.is_ok() {
-                let v = *rx.borrow_and_update();
-                s.input(CpuTempMsg::Update(v));
-            }
-        });
+        crate::subscribe_into_msg!(hub::cpu_temp::subscribe(), sender, CpuTempMsg::Update);
 
         ComponentParts { model, widgets }
     }

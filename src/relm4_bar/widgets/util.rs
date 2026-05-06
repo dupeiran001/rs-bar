@@ -48,13 +48,17 @@ impl Drop for SuppressGuard<'_> {
 macro_rules! subscribe_into_msg {
     ($rx:expr, $sender:expr, $variant:expr) => {{
         let mut __sub_rx = $rx;
-        let __sub_sender = $sender.clone();
+        let __sub_sender = $sender.input_sender().clone();
         relm4::spawn_local(async move {
             let initial = __sub_rx.borrow_and_update().clone();
-            __sub_sender.input($variant(initial));
+            if __sub_sender.send($variant(initial)).is_err() {
+                return;
+            }
             while __sub_rx.changed().await.is_ok() {
                 let v = __sub_rx.borrow_and_update().clone();
-                __sub_sender.input($variant(v));
+                if __sub_sender.send($variant(v)).is_err() {
+                    return;
+                }
             }
         });
     }};

@@ -48,7 +48,11 @@ const COLOR_CLASSES: &[&str] = &[
 
 /// Pick the icon name for the given charging state.
 fn icon_name(charging: bool) -> &'static str {
-    if charging { ICON_CHARGING } else { ICON_BATTERY }
+    if charging {
+        ICON_CHARGING
+    } else {
+        ICON_BATTERY
+    }
 }
 
 /// Install a process-wide CssProvider once that defines the battery color
@@ -228,19 +232,7 @@ impl SimpleComponent for Battery {
         capsule(&root, model.grouped);
         capsule_interactive(&root, model.grouped);
 
-        // Subscription: bridge the watch::Receiver<BatteryState> into messages.
-        let mut rx = hub::battery::subscribe();
-        let s = sender.clone();
-        relm4::spawn_local(async move {
-            // Send the initial value so the visibility/state is set on first
-            // tick rather than after the first hub publish.
-            let initial = rx.borrow_and_update().clone();
-            s.input(BatteryMsg::Update(initial));
-            while rx.changed().await.is_ok() {
-                let v = rx.borrow_and_update().clone();
-                s.input(BatteryMsg::Update(v));
-            }
-        });
+        crate::subscribe_into_msg!(hub::battery::subscribe(), sender, BatteryMsg::Update);
 
         ComponentParts { model, widgets }
     }

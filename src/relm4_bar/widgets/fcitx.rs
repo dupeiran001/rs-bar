@@ -65,15 +65,11 @@ impl SimpleComponent for Fcitx {
 
         capsule_icon(&root, model.grouped);
 
-        // Subscription: bridge the watch::Receiver<FcitxState> into messages.
-        let mut rx = hub::fcitx::subscribe();
-        let s = sender.clone();
-        relm4::spawn_local(async move {
-            while rx.changed().await.is_ok() {
-                let v = rx.borrow_and_update().im;
-                s.input(FcitxMsg::Update(v));
-            }
-        });
+        crate::subscribe_into_msg!(
+            hub::fcitx::subscribe(),
+            sender,
+            |state: hub::fcitx::FcitxState| FcitxMsg::Update(state.im)
+        );
 
         ComponentParts { model, widgets }
     }

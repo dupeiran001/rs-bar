@@ -17,12 +17,7 @@ const ICON_NAME: &str = "memory-symbolic";
 
 /// CSS classes for color bands. `set_exclusive_class` strips the others
 /// before adding the chosen one, so stale classes can't accumulate.
-const COLOR_CLASSES: &[&str] = &[
-    "memory-crit",
-    "memory-warn",
-    "memory-norm",
-    "memory-dim",
-];
+const COLOR_CLASSES: &[&str] = &["memory-crit", "memory-warn", "memory-norm", "memory-dim"];
 
 pub struct Memory {
     /// Last-seen usage as a float, kept for the displayed-value coalescing
@@ -78,17 +73,7 @@ impl SimpleComponent for Memory {
 
         capsule(&root, model.grouped);
 
-        // Subscription: bridge the watch::Receiver<f32> into component messages.
-        // `relm4::spawn_local` runs on the GTK main context, so passing the
-        // ComponentSender across the await is safe.
-        let mut rx = hub::memory::subscribe();
-        let s = sender.clone();
-        relm4::spawn_local(async move {
-            while rx.changed().await.is_ok() {
-                let v = *rx.borrow_and_update();
-                s.input(MemoryMsg::Update(v));
-            }
-        });
+        crate::subscribe_into_msg!(hub::memory::subscribe(), sender, MemoryMsg::Update);
 
         ComponentParts { model, widgets }
     }

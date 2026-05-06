@@ -95,16 +95,11 @@ impl SimpleComponent for BatteryDraw {
 
         capsule(&root, model.grouped);
 
-        // Subscription: bridge the watch::Receiver<PowerDrawSample> into
-        // component messages, projecting to just the `battery_w` field.
-        let mut rx = hub::power_draw::subscribe();
-        let s = sender.clone();
-        relm4::spawn_local(async move {
-            while rx.changed().await.is_ok() {
-                let v = rx.borrow_and_update().battery_w;
-                s.input(BatteryDrawMsg::Update(v));
-            }
-        });
+        crate::subscribe_into_msg!(
+            hub::power_draw::subscribe(),
+            sender,
+            |sample: hub::power_draw::PowerDrawSample| { BatteryDrawMsg::Update(sample.battery_w) }
+        );
 
         ComponentParts { model, widgets }
     }

@@ -96,16 +96,11 @@ impl SimpleComponent for PsysDraw {
 
         capsule(&root, model.grouped);
 
-        // Subscription: bridge the watch::Receiver<PowerDrawSample> into
-        // component messages, forwarding only the psys field.
-        let mut rx = hub::power_draw::subscribe();
-        let s = sender.clone();
-        relm4::spawn_local(async move {
-            while rx.changed().await.is_ok() {
-                let v = rx.borrow_and_update().psys_w;
-                s.input(PsysDrawMsg::Update(v));
-            }
-        });
+        crate::subscribe_into_msg!(
+            hub::power_draw::subscribe(),
+            sender,
+            |sample: hub::power_draw::PowerDrawSample| { PsysDrawMsg::Update(sample.psys_w) }
+        );
 
         ComponentParts { model, widgets }
     }

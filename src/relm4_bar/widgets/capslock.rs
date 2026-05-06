@@ -66,17 +66,7 @@ impl SimpleComponent for CapsLock {
 
         capsule_icon(&root, model.grouped);
 
-        let mut rx = hub::capslock::subscribe();
-        let s = sender.clone();
-        relm4::spawn_local(async move {
-            // Forward the initial value too, so visibility is correct on the
-            // first sample rather than waiting for a change.
-            s.input(CapsLockMsg::Update(*rx.borrow_and_update()));
-            while rx.changed().await.is_ok() {
-                let v = *rx.borrow_and_update();
-                s.input(CapsLockMsg::Update(v));
-            }
-        });
+        crate::subscribe_into_msg!(hub::capslock::subscribe(), sender, CapsLockMsg::Update);
 
         ComponentParts { model, widgets }
     }

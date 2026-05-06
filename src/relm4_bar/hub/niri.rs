@@ -58,11 +58,7 @@ fn listener(tx: watch::Sender<NiriSnapshot>) {
     let mut outputs: Vec<niri_ipc::Output> = Vec::new();
     let mut initial_windows: Vec<niri_ipc::Window> = Vec::new();
 
-    if let Ok(mut s) = Socket::connect() {
-        if let Ok(Ok(Response::Outputs(o))) = s.send(Request::Outputs) {
-            outputs = o.into_values().collect();
-        }
-    }
+    refresh_outputs(&mut outputs);
     if let Ok(mut s) = Socket::connect() {
         if let Ok(Ok(Response::Windows(w))) = s.send(Request::Windows) {
             initial_windows = w;
@@ -116,11 +112,21 @@ fn listener(tx: watch::Sender<NiriSnapshot>) {
             continue;
         }
 
+        // niri's event stream has no dedicated output-add/remove event, but
+        // an output appearing or disappearing always rewrites the workspace
+        // list (each output has its own workspaces). Use WorkspacesChanged as
+        // the trigger to refresh our outputs cache so minimap can scale tiles
+        // for the new monitor's logical size.
+        let workspaces_changed = matches!(event, Event::WorkspacesChanged { .. });
+
         // Feed the event through the workspaces state first, then windows.
         // The state machines return None when they've consumed the event and
         // Some(event) when they haven't — pass the leftover through.
         let event = match ws_state.apply(event) {
             None => {
+                if workspaces_changed && needs_output_refresh(&ws_state, &outputs) {
+                    refresh_outputs(&mut outputs);
+                }
                 publish(&tx, &ws_state, &win_state, &outputs, overview_open);
                 continue;
             }
@@ -130,6 +136,32 @@ fn listener(tx: watch::Sender<NiriSnapshot>) {
             publish(&tx, &ws_state, &win_state, &outputs, overview_open);
         }
     }
+}
+
+/// Replace `outputs` with a fresh `Request::Outputs` response. No-op on
+/// socket / IPC failure — we keep the previous cache so the bar doesn't
+/// regress to no outputs at all on a transient error.
+fn refresh_outputs(outputs: &mut Vec<niri_ipc::Output>) {
+    if let Ok(mut s) = Socket::connect() {
+        if let Ok(Ok(Response::Outputs(o))) = s.send(Request::Outputs) {
+            *outputs = o.into_values().collect();
+        }
+    }
+}
+
+/// True if any workspace references an output we don't have cached, or if
+/// any cached output no longer has a referencing workspace. Cheap guard so
+/// we only re-fetch on actual output topology changes — purely-internal
+/// workspace edits (rename, reorder, focus) don't trigger a socket round-trip.
+fn needs_output_refresh(ws_state: &WorkspacesState, outputs: &[niri_ipc::Output]) -> bool {
+    use std::collections::HashSet;
+    let cached: HashSet<&str> = outputs.iter().map(|o| o.name.as_str()).collect();
+    let referenced: HashSet<&str> = ws_state
+        .workspaces
+        .values()
+        .filter_map(|w| w.output.as_deref())
+        .collect();
+    referenced.iter().any(|n| !cached.contains(n)) || cached.iter().any(|n| !referenced.contains(n))
 }
 
 fn publish(

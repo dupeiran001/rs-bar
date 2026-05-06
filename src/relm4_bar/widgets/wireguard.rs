@@ -114,18 +114,7 @@ impl SimpleComponent for Wireguard {
         // `.cursor_pointer()` GPUI styling.
         root.set_cursor_from_name(Some("pointer"));
 
-        // Subscription: bridge the watch::Receiver<bool> into component messages.
-        let mut rx = hub::wireguard::subscribe();
-        let s = sender.clone();
-        relm4::spawn_local(async move {
-            // Apply the current value immediately, then await further changes.
-            let initial = *rx.borrow_and_update();
-            s.input(WireguardMsg::Update(initial));
-            while rx.changed().await.is_ok() {
-                let v = *rx.borrow_and_update();
-                s.input(WireguardMsg::Update(v));
-            }
-        });
+        crate::subscribe_into_msg!(hub::wireguard::subscribe(), sender, WireguardMsg::Update);
 
         // Click → toggle the connection via nmcli on a detached thread so we
         // never block the GTK main loop on the subprocess.

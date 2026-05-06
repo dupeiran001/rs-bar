@@ -100,17 +100,7 @@ impl SimpleComponent for CpuUsage {
 
         capsule(&root, model.grouped);
 
-        // Subscription: bridge the watch::Receiver<f32> into component messages.
-        // `relm4::spawn_local` runs on the GTK main context, so passing the
-        // ComponentSender across the await is safe.
-        let mut rx = hub::cpu_usage::subscribe();
-        let s = sender.clone();
-        relm4::spawn_local(async move {
-            while rx.changed().await.is_ok() {
-                let v = *rx.borrow_and_update();
-                s.input(CpuUsageMsg::Update(v));
-            }
-        });
+        crate::subscribe_into_msg!(hub::cpu_usage::subscribe(), sender, CpuUsageMsg::Update);
 
         ComponentParts { model, widgets }
     }

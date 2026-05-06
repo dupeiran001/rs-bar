@@ -90,20 +90,11 @@ impl SimpleComponent for CpuFreqGraph {
 
         capsule(&root, init.grouped);
 
-        // Subscription: forward every hub publish as a Sample message. The
-        // graph updates every tick even when the textual freq is unchanged.
-        let mut rx = hub::cpu_freq::subscribe();
-        let s = sender.clone();
-        relm4::spawn_local(async move {
-            // Send the current value first so the graph renders something
-            // immediately on launch, then loop on changes.
-            let initial = rx.borrow_and_update().avg_ghz;
-            s.input(CpuFreqGraphMsg::Sample(initial));
-            while rx.changed().await.is_ok() {
-                let avg = rx.borrow_and_update().avg_ghz;
-                s.input(CpuFreqGraphMsg::Sample(avg));
-            }
-        });
+        crate::subscribe_into_msg!(
+            hub::cpu_freq::subscribe(),
+            sender,
+            |reading: hub::cpu_freq::FreqReading| { CpuFreqGraphMsg::Sample(reading.avg_ghz) }
+        );
 
         ComponentParts { model, widgets }
     }

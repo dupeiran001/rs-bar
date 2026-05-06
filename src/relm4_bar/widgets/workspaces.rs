@@ -113,16 +113,7 @@ impl SimpleComponent for Workspaces {
 
         capsule(&root, init.grouped);
 
-        let mut rx = hub::niri::subscribe();
-        let s = sender.clone();
-        relm4::spawn_local(async move {
-            let snap = rx.borrow_and_update().clone();
-            s.input(WorkspacesMsg::Update(snap));
-            while rx.changed().await.is_ok() {
-                let snap = rx.borrow_and_update().clone();
-                s.input(WorkspacesMsg::Update(snap));
-            }
-        });
+        crate::subscribe_into_msg!(hub::niri::subscribe(), sender, WorkspacesMsg::Update);
 
         ComponentParts { model, widgets }
     }

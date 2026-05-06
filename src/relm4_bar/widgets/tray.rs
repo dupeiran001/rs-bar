@@ -120,19 +120,7 @@ impl SimpleComponent for Tray {
         // startup when the SNI bus has zero items.
         root.set_visible(false);
 
-        // Subscription: bridge the watch::Receiver<TrayState> into messages.
-        // Apply the current value immediately so the widget renders in
-        // its correct (possibly empty) state without waiting for a publish.
-        let mut rx = hub::tray::subscribe();
-        let s = sender.clone();
-        relm4::spawn_local(async move {
-            let initial = rx.borrow_and_update().clone();
-            s.input(TrayMsg::Update(initial));
-            while rx.changed().await.is_ok() {
-                let v = rx.borrow_and_update().clone();
-                s.input(TrayMsg::Update(v));
-            }
-        });
+        crate::subscribe_into_msg!(hub::tray::subscribe(), sender, TrayMsg::Update);
 
         ComponentParts { model, widgets }
     }
@@ -159,8 +147,7 @@ impl Tray {
         }
 
         // 1. Compute the set of incoming ids in the order they arrive.
-        let new_order: Vec<String> =
-            state.items.iter().map(|it| it.id.clone()).collect();
+        let new_order: Vec<String> = state.items.iter().map(|it| it.id.clone()).collect();
 
         // 2. Drop slots that are no longer present.
         self.slots.retain(|id, slot| {
@@ -200,9 +187,8 @@ impl Tray {
                 update_image(&slot.image, item);
             }
             if needs_create || slot.cached.title != new_cached.title {
-                slot.button.set_tooltip_text(
-                    item.tooltip.as_deref().or(item.title.as_deref()),
-                );
+                slot.button
+                    .set_tooltip_text(item.tooltip.as_deref().or(item.title.as_deref()));
             }
             if needs_create || slot.cached.menu_sig != new_cached.menu_sig {
                 rebuild_menu(slot, item);
@@ -369,20 +355,14 @@ fn rebuild_menu(slot: &mut IconSlot, item: &TrayItem) {
     if item.menu.is_empty() {
         // No menu → close (if open) and replace with empty model.
         popover::popdown(&slot.popover);
-        slot.popover
-            .set_menu_model(Some(&gio::Menu::new()));
+        slot.popover.set_menu_model(Some(&gio::Menu::new()));
         return;
     }
 
     // Counter ensures unique action names across nested submenus, since
     // dbusmenu ids are not necessarily unique within a tree.
     let counter = Rc::new(RefCell::new(0u32));
-    let model = build_menu_model(
-        &item.menu,
-        &item.id,
-        &slot.action_group,
-        &counter,
-    );
+    let model = build_menu_model(&item.menu, &item.id, &slot.action_group, &counter);
 
     slot.popover.set_menu_model(Some(&model));
 }
@@ -401,11 +381,7 @@ fn build_menu_model(
 
     for entry in entries {
         match entry {
-            TrayMenuEntry::Item {
-                id,
-                label,
-                enabled,
-            } => {
+            TrayMenuEntry::Item { id, label, enabled } => {
                 let n = {
                     let mut c = counter.borrow_mut();
                     *c += 1;

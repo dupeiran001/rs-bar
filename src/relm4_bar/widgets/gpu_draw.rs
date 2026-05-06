@@ -161,17 +161,11 @@ impl SimpleComponent for GpuDraw {
 
         capsule(&root, model.grouped);
 
-        // Subscription: bridge the watch::Receiver<PowerDrawSample> into
-        // component messages. We forward only the `gpu_w` field; the widget
-        // ignores battery / cpu / psys readings.
-        let mut rx = hub::power_draw::subscribe();
-        let s = sender.clone();
-        relm4::spawn_local(async move {
-            while rx.changed().await.is_ok() {
-                let v = rx.borrow_and_update().gpu_w;
-                s.input(GpuDrawMsg::Update(v));
-            }
-        });
+        crate::subscribe_into_msg!(
+            hub::power_draw::subscribe(),
+            sender,
+            |sample: hub::power_draw::PowerDrawSample| { GpuDrawMsg::Update(sample.gpu_w) }
+        );
 
         ComponentParts { model, widgets }
     }

@@ -99,18 +99,7 @@ impl SimpleComponent for Minimap {
         // Start hidden — we'll un-hide as soon as any windows are placed.
         root.set_visible(false);
 
-        // Subscription: forward NiriSnapshot updates as component messages.
-        // Send the current value first so the widget renders immediately.
-        let mut rx = hub::niri::subscribe();
-        let s = sender.clone();
-        relm4::spawn_local(async move {
-            let snap = rx.borrow_and_update().clone();
-            s.input(MinimapMsg::Update(snap));
-            while rx.changed().await.is_ok() {
-                let snap = rx.borrow_and_update().clone();
-                s.input(MinimapMsg::Update(snap));
-            }
-        });
+        crate::subscribe_into_msg!(hub::niri::subscribe(), sender, MinimapMsg::Update);
 
         ComponentParts { model, widgets }
     }
@@ -122,9 +111,7 @@ impl SimpleComponent for Minimap {
                 let active_ws = snapshot
                     .workspaces
                     .iter()
-                    .find(|ws| {
-                        ws.is_active && ws.output.as_deref() == Some(&self.connector)
-                    });
+                    .find(|ws| ws.is_active && ws.output.as_deref() == Some(&self.connector));
                 let active_ws_id = active_ws.map(|ws| ws.id);
                 let active_window_on_ws = active_ws.and_then(|ws| ws.active_window_id);
 
@@ -154,8 +141,12 @@ impl SimpleComponent for Minimap {
                     layout_fp = layout_fp.wrapping_mul(1_000_003).wrapping_add(w.id);
                     layout_fp = layout_fp.wrapping_mul(1_000_003).wrapping_add(col as u64);
                     layout_fp = layout_fp.wrapping_mul(1_000_003).wrapping_add(row as u64);
-                    layout_fp = layout_fp.wrapping_mul(1_000_003).wrapping_add((tw * 1000.0) as u64);
-                    layout_fp = layout_fp.wrapping_mul(1_000_003).wrapping_add((th * 1000.0) as u64);
+                    layout_fp = layout_fp
+                        .wrapping_mul(1_000_003)
+                        .wrapping_add((tw * 1000.0) as u64);
+                    layout_fp = layout_fp
+                        .wrapping_mul(1_000_003)
+                        .wrapping_add((th * 1000.0) as u64);
                 }
                 let key = (
                     ws_windows.len(),
@@ -222,8 +213,7 @@ impl SimpleComponent for Minimap {
                 let total_w = tiles.iter().map(|t| t.x + t.w).fold(0.0_f64, f64::max);
                 let total_h = tiles.iter().map(|t| t.y + t.h).fold(0.0_f64, f64::max);
 
-                let (out_w, out_h) =
-                    output_size.unwrap_or((total_w.max(1.0), total_h.max(1.0)));
+                let (out_w, out_h) = output_size.unwrap_or((total_w.max(1.0), total_h.max(1.0)));
                 let view_w = total_w.max(out_w);
                 // Include total_h in the vertical viewport so vertically-
                 // stacked windows (niri overview, vertical columns) scale

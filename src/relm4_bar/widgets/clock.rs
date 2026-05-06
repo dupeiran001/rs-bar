@@ -96,10 +96,13 @@ impl SimpleComponent for Clock {
 
         // Self-spawned 1Hz timer. Sends Tick to the component each second; the
         // `update` handler does the displayed-value coalescing check.
-        let s = sender.clone();
+        let s = sender.input_sender().clone();
         glib::timeout_add_local(Duration::from_secs(1), move || {
-            s.input(ClockMsg::Tick);
-            glib::ControlFlow::Continue
+            if s.send(ClockMsg::Tick).is_ok() {
+                glib::ControlFlow::Continue
+            } else {
+                glib::ControlFlow::Break
+            }
         });
 
         // ── Popover with seconds-precision time, long date, and calendar ──
@@ -126,8 +129,7 @@ impl SimpleComponent for Clock {
         // 1Hz timer for the popover seconds label, alive only while shown.
         // SourceId is !Send and !Sync; keep it inside an Rc<RefCell<…>> so the
         // show/closed closures can swap it without cloning the SourceId.
-        let popover_source: Rc<RefCell<Option<glib::SourceId>>> =
-            Rc::new(RefCell::new(None));
+        let popover_source: Rc<RefCell<Option<glib::SourceId>>> = Rc::new(RefCell::new(None));
 
         {
             let popover_time = popover_time.clone();

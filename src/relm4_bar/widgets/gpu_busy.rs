@@ -100,17 +100,7 @@ impl SimpleComponent for GpuBusy {
 
         capsule(&root, model.grouped);
 
-        let mut rx = hub::gpu_busy::subscribe();
-        let s = sender.clone();
-        relm4::spawn_local(async move {
-            // Forward the initial value too, so we can decide visibility on
-            // the first sample rather than waiting for the first change.
-            s.input(GpuBusyMsg::Update(*rx.borrow_and_update()));
-            while rx.changed().await.is_ok() {
-                let v = *rx.borrow_and_update();
-                s.input(GpuBusyMsg::Update(v));
-            }
-        });
+        crate::subscribe_into_msg!(hub::gpu_busy::subscribe(), sender, GpuBusyMsg::Update);
 
         ComponentParts { model, widgets }
     }
