@@ -45,6 +45,7 @@ mod gpu_busy;
 mod gpu_draw;
 mod memory;
 mod minimap;
+mod net_traffic;
 mod notch;
 mod pkg_update;
 mod power;
