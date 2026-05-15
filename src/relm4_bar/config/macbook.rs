@@ -5,7 +5,8 @@
 #[allow(unused_imports)]
 use crate::relm4_bar::widgets::{
     Battery, BatteryDraw, Bluetooth, Brightness, CapsLock, Clock, CpuDraw, CpuFreq, CpuFreqGraph,
-    CpuTemp, CpuUsage, Fcitx, Memory, Minimap, Notch, PkgUpdate, Power, PsysDraw, Tray, Volume,
+    CpuTemp, CpuUsage, Fcitx, Memory, Minimap, NetTraffic, Notch, PkgUpdate, Power, PsysDraw,
+    Tray, Volume,
     Wifi, WindowTitle, Wireguard, Workspaces,
 };
 #[allow(unused_imports)]
@@ -52,7 +53,7 @@ pub(super) fn bar() -> BarLayout {
             group!(BatteryDraw, |, CpuDraw, |, PsysDraw)
         ),
         right: widgets!(
-            Wireguard, Battery, Volume, Brightness, Tray, Fcitx, CapsLock, Power
+            Wireguard, Battery, Volume, Brightness, Tray, Fcitx, CapsLock, Power, NetTraffic
         ),
     }
 }
