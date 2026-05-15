@@ -13,6 +13,7 @@ pub mod cpu_temp;
 pub mod cpu_usage;
 pub mod gpu_busy;
 pub mod memory;
+pub mod net_traffic;
 pub mod niri;
 pub mod power_draw;
 pub mod tray;
