@@ -26,7 +26,12 @@ const BORDER_STROKE: f64 = 1.35;
 const HEAD_GLOW_RADIUS: f64 = 4.0;
 const HEAD_DOT_RADIUS: f64 = 1.7;
 const PROGRESS_SEGMENTS: usize = 180;
-const CLOCK_SHELL_PAD: i32 = 5;
+/// Transparent ring band around the pill that the animated border + head glow
+/// are drawn into. Kept equal to `HEAD_GLOW_RADIUS` so the glow reaches — but is
+/// never clipped by — the drawing area's edge. The clock's overall height is the
+/// `clock-content` pill (26px) + 2 × this band = 34px, which matches a
+/// `.bar-capsule` so the clock never makes the bar taller than its neighbours.
+const CLOCK_SHELL_PAD: i32 = 4;
 const BORDER_INSET: f64 = CLOCK_SHELL_PAD as f64;
 
 fn format_time_at(now: &DateTime<Local>) -> String {

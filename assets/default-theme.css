@@ -211,8 +211,11 @@ window.rs-bar {
     background-color: @rs_surface;
     border-radius: 9999px;
 }
+/* Pill sized to a .bar-capsule's visible box (min-height 24 + ~2px border):
+   clock total = this pill (26px) + 2×CLOCK_SHELL_PAD ring (clock.rs) = 34px.
+   The clock must not exceed a capsule's height or it stretches the whole bar. */
 .clock-content {
-    min-height: 26px;
+    min-height: 24px;
     padding: 1px 7px;
 }
 .clock-time { color: @rs_accent;     font-size: 11px; line-height: 12px; }
