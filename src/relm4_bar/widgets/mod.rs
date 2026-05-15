@@ -75,6 +75,7 @@ pub use gpu_busy::GpuBusy;
 pub use gpu_draw::GpuDraw;
 pub use memory::Memory;
 pub use minimap::Minimap;
+pub use net_traffic::NetTraffic;
 pub use notch::Notch;
 pub use pkg_update::PkgUpdate;
 pub use power::Power;

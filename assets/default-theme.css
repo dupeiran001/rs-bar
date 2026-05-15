@@ -230,6 +230,11 @@ window.rs-bar {
 /* Window title */
 .window-title { color: @rs_fg; }
 
+/* Net traffic */
+.net-traffic      { font-feature-settings: "tnum"; }
+.net-traffic-norm { color: @rs_fg;      }
+.net-traffic-dim  { color: @rs_fg_dark; }
+
 /* Workspaces — fixed-size dots with three colour states matching the GPUI bar:
    active  → 18×9 accent pill,  has windows → 9×9 dim,  empty → 9×9 gutter.
    Transitions animate state changes (focus shift, occupied↔empty), opacity
