@@ -60,6 +60,23 @@ window.rs-bar {
     margin: 4px 2px;
 }
 
+/* Per-widget hover highlight inside a group. A group renders as one pill, but
+   each member lights independently on hover — only interactive members opt in,
+   via `capsule_interactive` → `.bar-group-interactive`. The position class
+   (set in `build_group`) rounds the outer corners of the end members so the
+   highlight follows the pill, and squares the edges facing a separator. */
+.bar-group-item {
+    min-height: 24px;
+    transition: background-color 160ms ease;
+}
+.bar-group-interactive:hover {
+    background-color: @rs_border_highlight;
+}
+.bar-group-item-first { border-radius: 9999px 0 0 9999px; }
+.bar-group-item-mid   { border-radius: 0; }
+.bar-group-item-last  { border-radius: 0 9999px 9999px 0; }
+.bar-group-item-only  { border-radius: 9999px; }
+
 /* Icon-only capsules (Bluetooth, Fcitx, Power, CapsLock, Wireguard):
    pin to a square so they render as a circle at the pill border-radius.
    GTK's flex still lets them grow horizontally if content exceeds the

@@ -138,11 +138,23 @@ pub fn build_group(entries: Vec<GroupEntry>) -> Widget {
 
     let mut keepers: Vec<Box<dyn std::any::Any>> = Vec::new();
 
+    // Tag each member with a position class so the theme can round the outer
+    // corners of the end members' hover highlight and square the edges that
+    // face a separator. Separators don't count — only the widgets do.
+    let widget_count = entries
+        .iter()
+        .filter(|e| matches!(e, GroupEntry::Widget(..)))
+        .count();
+    let mut widget_idx = 0usize;
+
     for entry in entries {
         match entry {
             GroupEntry::Widget(w, keeper) => {
+                w.add_css_class("bar-group-item");
+                w.add_css_class(group_item_position(widget_idx, widget_count));
                 row.append(&w);
                 keepers.push(keeper);
+                widget_idx += 1;
             }
             GroupEntry::Separator => {
                 let sep = gtk::Separator::new(gtk::Orientation::Vertical);
@@ -155,6 +167,21 @@ pub fn build_group(entries: Vec<GroupEntry>) -> Widget {
         name: "group",
         root: row.upcast(),
         _controller: Box::new(keepers),
+    }
+}
+
+/// Position class for a group member. End members get one rounded outer edge;
+/// middle members are square on both sides; a lone member stays fully round.
+/// Consumed by the `.bar-group-item-*` rules in default-theme.css.
+fn group_item_position(idx: usize, count: usize) -> &'static str {
+    if count <= 1 {
+        "bar-group-item-only"
+    } else if idx == 0 {
+        "bar-group-item-first"
+    } else if idx == count - 1 {
+        "bar-group-item-last"
+    } else {
+        "bar-group-item-mid"
     }
 }
 
@@ -182,11 +209,15 @@ pub fn capsule_icon(w: &impl glib::object::IsA<gtk::Widget>, grouped: bool) {
 /// hover rules in default-theme.css fire (background lift on `:hover`),
 /// plus sets the cursor to pointer. Call this after `capsule()` /
 /// `capsule_icon()` in widgets that respond to clicks (popovers, scroll,
-/// shell-out). No-op when grouped (the parent group owns the visuals).
+/// shell-out). When grouped, adds `bar-group-interactive` instead, so the
+/// member hover-highlights within the shared group pill (see the
+/// `.bar-group-item-*` rules in default-theme.css) rather than as a capsule.
 pub fn capsule_interactive(w: &impl glib::object::IsA<gtk::Widget>, grouped: bool) {
-    if !grouped {
+    w.set_cursor_from_name(Some("pointer"));
+    if grouped {
+        w.add_css_class("bar-group-interactive");
+    } else {
         w.add_css_class("interactive");
-        w.set_cursor_from_name(Some("pointer"));
     }
 }
 
