@@ -43,6 +43,9 @@ impl SimpleComponent for NetTraffic {
                 set_label: "↓ 0 KB/s",
                 add_css_class: "net-traffic",
             },
+            gtk::Separator {
+                set_orientation: gtk::Orientation::Vertical,
+            },
             #[name = "up_label"]
             gtk::Label {
                 set_label: "↑ 0 KB/s",
