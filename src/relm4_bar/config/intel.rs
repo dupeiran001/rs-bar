@@ -41,12 +41,19 @@ pub(super) fn bar() -> BarLayout {
         ),
         center: widgets!(Clock),
         center_right: widgets!(
-            Wifi,
-            Bluetooth,
             PkgUpdate,
             group!(GpuDraw, |, CpuDraw, |, GpuBusy),
             NetTraffic,
         ),
-        right: widgets!(Wireguard, Volume, Brightness, Tray, Fcitx, CapsLock, Power),
+        right: widgets!(
+            Wireguard,
+            group!(Wifi, | , Bluetooth),
+            Volume,
+            Brightness,
+            Tray,
+            Fcitx,
+            CapsLock,
+            Power
+        ),
     }
 }
