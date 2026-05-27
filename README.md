@@ -74,6 +74,17 @@ Grouped widgets share a single rounded container and skip their individual capsu
 
 ## Prerequisites
 
+### Build dependencies
+
+`rs-bar` currently compiles both GPUI and Relm4 backends, so GTK layer-shell
+development files must be installed at build time.
+
+On Arch:
+
+```sh
+sudo pacman -S --needed gtk4-layer-shell gtk4 pkgconf
+```
+
 ### Quick setup
 
 Run this to apply all permissions at once (log out and back in afterwards):

@@ -115,9 +115,10 @@ impl SimpleComponent for CpuFreqGraph {
 }
 
 /// Render the sparkline into the cairo context. Filled vertical bars, one per
-/// sample, right-aligned (newest on the right). Older samples fade toward
-/// fully-transparent on the left edge so the sparkline visually trails off
-/// into the past — same behaviour as the GPUI version.
+/// sample, right-aligned (newest on the right). A horizontal gradient
+/// (accent_dim → accent) carries the "older on the left, newer on the right"
+/// cue without per-bar alpha — the gradient is set as the paint source once
+/// and every bar samples it at its x-coordinate.
 fn draw_sparkline(
     cr: &cairo::Context,
     w: i32,
@@ -137,25 +138,31 @@ fn draw_sparkline(
 
     let range = (max_freq_ghz - min_freq_ghz).max(0.1);
 
-    // Nord frost-2 (#88C0D0).
-    let r = 0x88 as f64 / 255.0;
-    let g = 0xc0 as f64 / 255.0;
-    let b = 0xd0 as f64 / 255.0;
+    let gradient = cairo::LinearGradient::new(0.0, 0.0, w_f, 0.0);
+    // Nord polar-night-4 (#4C566A) — fg_gutter — left edge (older samples).
+    gradient.add_color_stop_rgb(
+        0.0,
+        0x4c as f64 / 255.0,
+        0x56 as f64 / 255.0,
+        0x6a as f64 / 255.0,
+    );
+    // Nord frost-2 (#88C0D0) — accent — right edge (newest sample).
+    gradient.add_color_stop_rgb(
+        1.0,
+        0x88 as f64 / 255.0,
+        0xc0 as f64 / 255.0,
+        0xd0 as f64 / 255.0,
+    );
+    let _ = cr.set_source(&gradient);
 
     for (i, &ghz) in samples.iter().enumerate() {
         let norm = ((ghz - min_freq_ghz) / range).clamp(0.0, 1.0) as f64;
         let bar_h = (norm * (h_f - 1.0) + 1.0).max(1.0);
         let y = h_f - bar_h;
         let x = x_offset + i as f64 * bar_w;
-        let alpha = if n <= 1 {
-            1.0
-        } else {
-            0.25 + 0.75 * (i as f64) / ((n - 1) as f64)
-        };
-        cr.set_source_rgba(r, g, b, alpha);
         cr.rectangle(x, y, bar_w, bar_h);
-        let _ = cr.fill();
     }
+    let _ = cr.fill();
 }
 
 impl NamedWidget for CpuFreqGraph {
